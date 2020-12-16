@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/nofeaturesonlybugs/set"
-	"github.com/stretchr/testify/assert"
+	"github.com/nofeaturesonlybugs/set/assert"
 )
 
 func TestValue_fields(t *testing.T) {
