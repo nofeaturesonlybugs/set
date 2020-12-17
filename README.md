@@ -7,17 +7,17 @@ Read the `godoc` for more detailed explanations and examples but here are some e
 {
     // type coercion
     b, i := true, 42
-    set.V(&b).To("False") // Sets b to false
-    set.V(&i).To("3.14")  // Sets i to 3
+    set.V(&b).To("False")    // Sets b to false
+    set.V(&i).To("3.14")     // Sets i to 3
 }
 
 {
     // type coercion
     a := int(0)
     b := uint(42)
-    set.V(&a).To(b)			    // This coerces b into a if possible.
-    set.V(&a).To("-57")		    // Also works.
-    set.V(&a).To("Hello")		// Returns an error.    
+    set.V(&a).To(b)             // This coerces b into a if possible.
+    set.V(&a).To("-57")         // Also works.
+    set.V(&a).To("Hello")       // Returns an error.    
 }
 ```
 
