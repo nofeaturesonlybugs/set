@@ -29,7 +29,10 @@ Read the `godoc` for more detailed explanations and examples but here are some e
     set.V(&bppp).To("True")
     fmt.Println(***bppp) // Prints true
 }
+```
 
+## Scalars-to-Slices and Slices-to-Scalars
+```go
 {
     // assign scalars to slices
     var b []bool
