@@ -160,27 +160,27 @@ fmt.Println(t.Address.Street1)      // 97531 Some Street
 
 ## Field Pointers Always Allocated
 ```go
-	type Address struct {
-		Street1 string `key:"street1"`
-		Street2 string `key:"street2"`
-		City    string `key:"city"`
-		State   string `key:"state"`
-		Zip     string `key:"zip"`
-	}
-	type Person struct {
-		Name    string   `key:"name"`
-		Age     uint     `key:"age"`
-		Address *Address `key:"address"`
-	}
-	m := map[string]interface{}{
-		"name": "Bob",
-        "age":  42,
-        // address is missing!
-	}
-	getter := set.MapGetter(m)
-    var t *Person
-    set.V(&t).FillByTag("key", getter)
-    fmt.Printf("%p\n", t.Address) // Prints a memory address; the field was allocated.
+type Address struct {
+    Street1 string `key:"street1"`
+    Street2 string `key:"street2"`
+    City    string `key:"city"`
+    State   string `key:"state"`
+    Zip     string `key:"zip"`
+}
+type Person struct {
+    Name    string   `key:"name"`
+    Age     uint     `key:"age"`
+    Address *Address `key:"address"`
+}
+m := map[string]interface{}{
+    "name": "Bob",
+    "age":  42,
+    // address is missing!
+}
+getter := set.MapGetter(m)
+var t *Person
+set.V(&t).FillByTag("key", getter)
+fmt.Printf("%p\n", t.Address) // Prints a memory address; the field was allocated.
 ```
 
 ## Pointer-to-Slices-of-Struct-Pointers -- OH MY!
