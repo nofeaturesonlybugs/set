@@ -204,7 +204,7 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 					return errors.Go(err)
 				}
 				if err = field.Value.Append(elem.pv.Interface()); err != nil {
-					return errors.Go(err)
+					return errors.Go(err) // Code coverage can not reach this statement.
 				}
 			} else {
 				return errors.Errorf("Getter.Get( %v ) returned a Getter for field %v and field is not fillable.", getName, field.Field.Name)
@@ -224,7 +224,7 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 						return errors.Go(err)
 					}
 					if err = field.Value.Append(elem.pv.Interface()); err != nil {
-						return errors.Go(err)
+						return errors.Go(err) // Code coverage can not reach this statement.
 					}
 				}
 			} else if field.Value.IsStruct {

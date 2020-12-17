@@ -1176,3 +1176,110 @@ func TestValue_fillNestedPointersByMapWithNils(t *testing.T) {
 		chk.NotNil(t.Address)
 	}
 }
+
+func TestValue_fillCodeCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	m := map[string]interface{}{
+		"Nested": map[string]interface{}{
+			"String": "Hello, World!",
+		},
+		"Slice": []map[string]interface{}{
+			{
+				"String": "Hello, World!",
+			},
+			{
+				"String": "Goodbye, World!",
+			},
+		},
+	}
+	getter := set.MapGetter(m)
+	{
+		type T struct {
+			Nested struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested string
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice int
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+}
+
+func TestValue_appendCodeCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	{
+		var b []bool
+		err = set.V(b).Append(42)
+		chk.Error(err)
+	}
+}
