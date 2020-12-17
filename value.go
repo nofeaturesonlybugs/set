@@ -34,7 +34,13 @@ func V(arg interface{}) *Value {
 		v, t, k = argReflectValue, argReflectValue.Type(), argReflectValue.Kind()
 	} else {
 		v = reflect.ValueOf(arg)
-		t, k = v.Type(), v.Kind()
+		func() {
+			defer func() {
+				recover()
+			}()
+			// This can panic if arg == nil so wrap cleanly.
+			t, k = v.Type(), v.Kind()
+		}()
 	}
 	rv.v, rv.t, rv.k = v, t, k
 	rv.pv, rv.pt, rv.pk = v, t, k
@@ -309,7 +315,9 @@ func (me *Value) To(arg interface{}) error {
 		return errors.Errorf("Set expects an assignable type; %T is not.", me.original)
 	} else if me.pv.Set(reflect.Zero(me.pt)); false {
 		// A non-entry if to set the type to its zero value but after checking if its settable.
-	} else if data.t.AssignableTo(me.pt) && me.pk != reflect.Slice {
+	} else if data.original == nil {
+		return nil
+	} else if data.v.IsValid() && data.t.AssignableTo(me.pt) && me.pk != reflect.Slice {
 		// N.B: We checked that me.pk is not a slice because this package always makes a copy of a slice!
 		me.pv.Set(data.v)
 		return nil

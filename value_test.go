@@ -896,3 +896,283 @@ func TestValue_fillNestedStructSlices(t *testing.T) {
 		chk.Equal("99999", t.Slice[0].Address.Zip)
 	}
 }
+
+func TestValue_fillNestedStructSlicesAsPointers(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	type Address struct {
+		Street1 string `key:"street1"`
+		Street2 string `key:"street2"`
+		City    string `key:"city"`
+		State   string `key:"state"`
+		Zip     string `key:"zip"`
+	}
+	type Person struct {
+		Name    string   `key:"name"`
+		Age     uint     `key:"age"`
+		Address *Address `key:"address"`
+	}
+	type Company struct {
+		Name         string    `key:"name"`
+		Employees    []*Person `key:"employees"`
+		LastEmployee *Person   `key:"employees"`
+		Slice        []*Person `key:"slice"`
+	}
+	m := map[string]interface{}{
+		"name": "Some Company",
+		"slice": map[string]interface{}{
+			"name": "Slice",
+			"age":  2,
+			"address": map[interface{}]string{
+				"street1": "Slice Street",
+				"street2": "",
+				"city":    "Slice City",
+				"state":   "SL",
+				"zip":     "99999",
+			},
+		},
+		"employees": []map[string]interface{}{
+			{
+				"name": "Bob",
+				"age":  42,
+				"address": map[interface{}]string{
+					"street1": "97531 Some Street",
+					"street2": "",
+					"city":    "Big City",
+					"state":   "ST",
+					"zip":     "12345",
+				},
+			},
+			{
+				"name": "Sally",
+				"age":  48,
+				"address": map[interface{}]string{
+					"street1": "555 Small Lane",
+					"street2": "",
+					"city":    "Other City",
+					"state":   "OO",
+					"zip":     "54321",
+				},
+			},
+		},
+	}
+	getter := set.MapGetter(m)
+	{
+		var t *Company
+		err = set.V(&t).FillByTag("key", getter)
+		chk.NoError(err)
+		chk.Equal("Some Company", t.Name)
+		//
+		chk.Equal(2, len(t.Employees))
+		//
+		chk.Equal("Bob", t.Employees[0].Name)
+		chk.Equal(uint(42), t.Employees[0].Age)
+		chk.Equal("97531 Some Street", t.Employees[0].Address.Street1)
+		chk.Equal("", t.Employees[0].Address.Street2)
+		chk.Equal("Big City", t.Employees[0].Address.City)
+		chk.Equal("ST", t.Employees[0].Address.State)
+		chk.Equal("12345", t.Employees[0].Address.Zip)
+		//
+		chk.Equal("Sally", t.Employees[1].Name)
+		chk.Equal(uint(48), t.Employees[1].Age)
+		chk.Equal("555 Small Lane", t.Employees[1].Address.Street1)
+		chk.Equal("", t.Employees[1].Address.Street2)
+		chk.Equal("Other City", t.Employees[1].Address.City)
+		chk.Equal("OO", t.Employees[1].Address.State)
+		chk.Equal("54321", t.Employees[1].Address.Zip)
+		//
+		chk.Equal("Sally", t.LastEmployee.Name)
+		chk.Equal(uint(48), t.LastEmployee.Age)
+		chk.Equal("555 Small Lane", t.LastEmployee.Address.Street1)
+		chk.Equal("", t.LastEmployee.Address.Street2)
+		chk.Equal("Other City", t.LastEmployee.Address.City)
+		chk.Equal("OO", t.LastEmployee.Address.State)
+		chk.Equal("54321", t.LastEmployee.Address.Zip)
+		//
+		chk.Equal(1, len(t.Slice))
+		chk.Equal("Slice", t.Slice[0].Name)
+		chk.Equal("Slice Street", t.Slice[0].Address.Street1)
+		chk.Equal("", t.Slice[0].Address.Street2)
+		chk.Equal("Slice City", t.Slice[0].Address.City)
+		chk.Equal("SL", t.Slice[0].Address.State)
+		chk.Equal("99999", t.Slice[0].Address.Zip)
+	}
+}
+
+func TestValue_fillNestedStructPointerToSlicesAsPointers(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	type Address struct {
+		Street1 string `key:"street1"`
+		Street2 string `key:"street2"`
+		City    string `key:"city"`
+		State   string `key:"state"`
+		Zip     string `key:"zip"`
+	}
+	type Person struct {
+		Name    string   `key:"name"`
+		Age     uint     `key:"age"`
+		Address *Address `key:"address"`
+	}
+	type Company struct {
+		Name         string     `key:"name"`
+		Employees    *[]*Person `key:"employees"`
+		LastEmployee *Person    `key:"employees"`
+		Slice        *[]*Person `key:"slice"`
+	}
+	m := map[string]interface{}{
+		"name": "Some Company",
+		"slice": map[string]interface{}{
+			"name": "Slice",
+			"age":  2,
+			"address": map[interface{}]string{
+				"street1": "Slice Street",
+				"street2": "",
+				"city":    "Slice City",
+				"state":   "SL",
+				"zip":     "99999",
+			},
+		},
+		"employees": []map[string]interface{}{
+			{
+				"name": "Bob",
+				"age":  42,
+				"address": map[interface{}]string{
+					"street1": "97531 Some Street",
+					"street2": "",
+					"city":    "Big City",
+					"state":   "ST",
+					"zip":     "12345",
+				},
+			},
+			{
+				"name": "Sally",
+				"age":  48,
+				"address": map[interface{}]string{
+					"street1": "555 Small Lane",
+					"street2": "",
+					"city":    "Other City",
+					"state":   "OO",
+					"zip":     "54321",
+				},
+			},
+		},
+	}
+	getter := set.MapGetter(m)
+	{
+		var t *Company
+		err = set.V(&t).FillByTag("key", getter)
+		chk.NoError(err)
+		chk.Equal("Some Company", t.Name)
+		//
+		chk.Equal(2, len(*t.Employees))
+		//
+		chk.Equal("Bob", (*t.Employees)[0].Name)
+		chk.Equal(uint(42), (*t.Employees)[0].Age)
+		chk.Equal("97531 Some Street", (*t.Employees)[0].Address.Street1)
+		chk.Equal("", (*t.Employees)[0].Address.Street2)
+		chk.Equal("Big City", (*t.Employees)[0].Address.City)
+		chk.Equal("ST", (*t.Employees)[0].Address.State)
+		chk.Equal("12345", (*t.Employees)[0].Address.Zip)
+		//
+		chk.Equal("Sally", (*t.Employees)[1].Name)
+		chk.Equal(uint(48), (*t.Employees)[1].Age)
+		chk.Equal("555 Small Lane", (*t.Employees)[1].Address.Street1)
+		chk.Equal("", (*t.Employees)[1].Address.Street2)
+		chk.Equal("Other City", (*t.Employees)[1].Address.City)
+		chk.Equal("OO", (*t.Employees)[1].Address.State)
+		chk.Equal("54321", (*t.Employees)[1].Address.Zip)
+		//
+		chk.Equal("Sally", t.LastEmployee.Name)
+		chk.Equal(uint(48), t.LastEmployee.Age)
+		chk.Equal("555 Small Lane", t.LastEmployee.Address.Street1)
+		chk.Equal("", t.LastEmployee.Address.Street2)
+		chk.Equal("Other City", t.LastEmployee.Address.City)
+		chk.Equal("OO", t.LastEmployee.Address.State)
+		chk.Equal("54321", t.LastEmployee.Address.Zip)
+		//
+		chk.Equal(1, len(*t.Slice))
+		chk.Equal("Slice", (*t.Slice)[0].Name)
+		chk.Equal("Slice Street", (*t.Slice)[0].Address.Street1)
+		chk.Equal("", (*t.Slice)[0].Address.Street2)
+		chk.Equal("Slice City", (*t.Slice)[0].Address.City)
+		chk.Equal("SL", (*t.Slice)[0].Address.State)
+		chk.Equal("99999", (*t.Slice)[0].Address.Zip)
+	}
+}
+
+func TestValue_fillNestedPointersByMap(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	type Address struct {
+		Street1 string `key:"street1"`
+		Street2 string `key:"street2"`
+		City    string `key:"city"`
+		State   string `key:"state"`
+		Zip     string `key:"zip"`
+	}
+	type Person struct {
+		Name    string   `key:"name"`
+		Age     uint     `key:"age"`
+		Address *Address `key:"address"`
+	}
+	m := map[string]interface{}{
+		"name": "Bob",
+		"age":  42,
+		"address": map[interface{}]string{
+			"street1": "97531 Some Street",
+			"street2": "",
+			"city":    "Big City",
+			"state":   "ST",
+			"zip":     "12345",
+		},
+	}
+	getter := set.MapGetter(m)
+	{
+		var t *Person
+		err = set.V(&t).FillByTag("key", getter)
+		chk.NoError(err)
+		chk.Equal("Bob", t.Name)
+		chk.Equal(uint(42), t.Age)
+		chk.NotNil(t.Address)
+		chk.Equal("97531 Some Street", t.Address.Street1)
+		chk.Equal("", t.Address.Street2)
+		chk.Equal("Big City", t.Address.City)
+		chk.Equal("ST", t.Address.State)
+		chk.Equal("12345", t.Address.Zip)
+	}
+}
+
+func TestValue_fillNestedPointersByMapWithNils(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	type Address struct {
+		Street1 string `key:"street1"`
+		Street2 string `key:"street2"`
+		City    string `key:"city"`
+		State   string `key:"state"`
+		Zip     string `key:"zip"`
+	}
+	type Person struct {
+		Name    string   `key:"name"`
+		Age     uint     `key:"age"`
+		Address *Address `key:"address"`
+	}
+	m := map[string]interface{}{
+		"name": "Bob",
+		"age":  42,
+	}
+	getter := set.MapGetter(m)
+	{
+		var t *Person
+		err = set.V(&t).FillByTag("key", getter)
+		chk.NoError(err)
+		chk.Equal("Bob", t.Name)
+		chk.Equal(uint(42), t.Age)
+		chk.NotNil(t.Address)
+	}
+}
