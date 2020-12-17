@@ -1,5 +1,6 @@
 /develop
 
+0.1.0
     + Add types:
         + Value - sets data to scalars, slices, and structs with type coercion if necessary.
         + Getter - acts as value lookup when filling structs.
