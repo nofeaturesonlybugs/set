@@ -1,0 +1,6 @@
+/develop
+
+    + Add types:
+        + Value - sets data to scalars, slices, and structs with type coercion if necessary.
+        + Getter - acts as value lookup when filling structs.
+        + Field - intermediate type for iterating struct fields.
