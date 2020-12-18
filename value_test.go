@@ -212,6 +212,13 @@ func TestValue_setSlice(t *testing.T) {
 		chk.Equal(3, len(b))
 	}
 	{
+		i := []int{2, 4, 6}
+		chk.Equal(3, len(i))
+		err = set.V(&i).To([]interface{}{"Hi"})
+		chk.Error(err)
+		chk.Equal(0, len(i))
+	}
+	{
 		b := []bool{true, false, true}
 		chk.Equal(3, len(b))
 		err = set.V(&b).To([]bool{false, true, false, true})

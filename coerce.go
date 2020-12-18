@@ -151,46 +151,62 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 	"float-to-uint": func(target reflect.Value, value reflect.Value) error {
 		target.SetUint(0) // Zero out
 		var err error
-		if value.Float() < 0 {
-			err = errors.Errorf("Can not coerce negative float to uint.")
-		} else {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err = errors.Errorf("%v", r)
-					}
-				}()
-				target.SetUint(uint64(value.Float()))
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = errors.Errorf("Coerce float-to-uint fails with %v", r)
+				}
 			}()
-		}
+			if value.Float() < 0 {
+				err = errors.Errorf("Can not coerce negative float to uint.")
+			} else {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							err = errors.Errorf("%v", r)
+						}
+					}()
+					target.SetUint(uint64(value.Float()))
+				}()
+			}
+		}()
 		return err
 	},
 	"int-to-uint": func(target reflect.Value, value reflect.Value) error {
 		target.SetUint(0) // Zero out
 		var err error
-		if value.Int() < 0 {
-			err = errors.Errorf("Can not coerce negative int to uint.")
-		} else {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err = errors.Errorf("%v", r)
-					}
-				}()
-				target.SetUint(uint64(value.Int()))
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = errors.Errorf("Coerce int-to-uint fails with %v", r)
+				}
 			}()
+			if value.Int() < 0 {
+				err = errors.Errorf("Can not coerce negative int to uint.")
+			} else {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							err = errors.Errorf("%v", r)
+						}
+					}()
+					target.SetUint(uint64(value.Int()))
+				}()
 
-		}
+			}
+		}()
 		return err
 	},
 	"string-to-uint": func(target reflect.Value, value reflect.Value) error {
 		target.SetUint(0) // Zero out
+		var parsed uint64
+		var parsedFloat float64
 		var err error
 		if len(value.String()) > 0 && rune(value.String()[0]) == '-' {
 			err = errors.Errorf("Can not coerce negative number to uint.")
-		} else if parsed, err := strconv.ParseUint(value.String(), 0, target.Type().Bits()); err == nil {
+		} else if parsed, err = strconv.ParseUint(value.String(), 0, target.Type().Bits()); err == nil {
 			target.SetUint(parsed)
-		} else if parsedFloat, err := strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
+		} else if parsedFloat, err = strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
 			target.SetUint(uint64(parsedFloat))
 		} else {
 			err = errors.Go(err)

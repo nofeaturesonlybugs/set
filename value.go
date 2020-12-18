@@ -1,6 +1,7 @@
 package set
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/nofeaturesonlybugs/errors"
@@ -81,6 +82,13 @@ func V(arg interface{}) *Value {
 		rv.Elem = V(ptr)
 	}
 	//
+	if rv.pv.CanSet() == false {
+		rv.canSet = false
+		rv.canSetError = fmt.Sprintf("Type [%T] is not assignable; pass an address to V()", arg)
+	} else {
+		rv.canSet = true
+	}
+	//
 	return rv
 }
 
@@ -115,6 +123,10 @@ type Value struct {
 	pv reflect.Value // Pointed-to-reflect.Value
 	pt reflect.Type  // Pointed-to-reflect.Type
 	pk reflect.Kind  // Pointed-to-reflect.Kind
+	//
+	// We pre-check and store if pv is settable and an appropriate error message.
+	canSet      bool
+	canSetError string
 }
 
 // Append appends the item(s) to the end of the Value assuming it is some type of slice and every
@@ -274,16 +286,12 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 
 // Zero sets the Value to the Zero value of the appropriate type.
 func (me *Value) Zero() error {
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = errors.Errorf("%v", r)
-			}
-		}()
+	if !me.canSet {
+		return errors.Errorf(me.canSetError)
+	} else {
 		me.pv.Set(reflect.Zero(me.pt))
-	}()
-	return err
+		return nil
+	}
 }
 
 // To attempts to assign the argument into Value; Value is always set to the Zero value for its type before
@@ -310,12 +318,14 @@ func (me *Value) Zero() error {
 //		-> Note: If the elements themselves are pointers then, for example, T[0] and S[0] point
 //			at the same memory and will see changes to whatever is pointed at.
 func (me *Value) To(arg interface{}) error {
+	var err error
+	//
 	data := V(arg)
-	if me.pv.CanSet() == false {
-		return errors.Errorf("Set expects an assignable type; %T is not.", me.original)
-	} else if me.pv.Set(reflect.Zero(me.pt)); false {
-		// A non-entry if to set the type to its zero value but after checking if its settable.
-	} else if data.original == nil {
+	if err = me.Zero(); err != nil {
+		return err
+	}
+	//
+	if data.original == nil {
 		return nil
 	} else if data.v.IsValid() && data.t.AssignableTo(me.pt) && me.pk != reflect.Slice {
 		// N.B: We checked that me.pk is not a slice because this package always makes a copy of a slice!
@@ -328,7 +338,18 @@ func (me *Value) To(arg interface{}) error {
 	}
 	//
 	if me.IsSlice {
-		return me.setSlice(arg)
+		if !data.IsSlice {
+			arg = []interface{}{arg}
+		}
+		slice := reflect.ValueOf(arg)
+		for k, size := 0, slice.Len(); k < size; k++ {
+			elem := V(reflect.New(me.Elem.t).Interface())
+			if err = elem.To(slice.Index(k).Interface()); err != nil {
+				me.Zero()
+				return err
+			}
+			me.pv.Set(reflect.Append(me.pv, elem.pv))
+		}
 	} else if data.k == reflect.Slice {
 		// If the incoming type is slice but ours is not then we call set again using the last element in the slice.
 		if data.v.Len() > 0 {
@@ -338,44 +359,4 @@ func (me *Value) To(arg interface{}) error {
 		return errors.Go(err)
 	}
 	return nil
-}
-
-// setSlice is a sub-feature of Set() where Value represents a slice, type irrelevant, and we
-// want to zero it out and append everything passed to Set() to the new slice.
-func (me *Value) setSlice(arg interface{}) error {
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = errors.Errorf("%v", r)
-			}
-		}()
-		//
-		// Initially we set ourselves to a Zero value.
-		if err = me.Zero(); err != nil {
-			return
-		}
-		// We make a zero-value of the underlying slice but wrapped in our Value interface so we can
-		// append-with-type-coercion.
-		zero := V(reflect.New(me.pt))
-		//
-		// Here we coerce the incoming argument to a slice if it isn't already.
-		if reflect.TypeOf(arg).Kind() != reflect.Slice {
-			arg = []interface{}{arg}
-		}
-		slice := reflect.ValueOf(arg)
-		// With slice representing a reflected slice we can iterate the elements and append to the zero variable
-		// which also handles the type coercions for us.
-		for k, size := 0, slice.Len(); k < size; k++ {
-			elem := slice.Index(k)
-			if err = zero.Append(elem.Interface()); err != nil {
-				return
-			}
-		}
-		//
-		// If we make it here all elements were coerced or appended and we can set our internal reflected
-		// slice to the zero one we created.
-		me.pv.Set(zero.pv)
-	}()
-	return err
 }
