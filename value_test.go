@@ -212,6 +212,13 @@ func TestValue_setSlice(t *testing.T) {
 		chk.Equal(3, len(b))
 	}
 	{
+		i := []int{2, 4, 6}
+		chk.Equal(3, len(i))
+		err = set.V(&i).To([]interface{}{"Hi"})
+		chk.Error(err)
+		chk.Equal(0, len(i))
+	}
+	{
 		b := []bool{true, false, true}
 		chk.Equal(3, len(b))
 		err = set.V(&b).To([]bool{false, true, false, true})
@@ -1174,5 +1181,112 @@ func TestValue_fillNestedPointersByMapWithNils(t *testing.T) {
 		chk.Equal("Bob", t.Name)
 		chk.Equal(uint(42), t.Age)
 		chk.NotNil(t.Address)
+	}
+}
+
+func TestValue_fillCodeCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	m := map[string]interface{}{
+		"Nested": map[string]interface{}{
+			"String": "Hello, World!",
+		},
+		"Slice": []map[string]interface{}{
+			{
+				"String": "Hello, World!",
+			},
+			{
+				"String": "Goodbye, World!",
+			},
+		},
+	}
+	getter := set.MapGetter(m)
+	{
+		type T struct {
+			Nested struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Nested string
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice []struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice struct {
+				String int
+			}
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+	{
+		type T struct {
+			Slice int
+		}
+		var t T
+		err = set.V(&t).Fill(getter)
+		chk.Error(err)
+	}
+}
+
+func TestValue_appendCodeCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	{
+		var b []bool
+		err = set.V(b).Append(42)
+		chk.Error(err)
 	}
 }

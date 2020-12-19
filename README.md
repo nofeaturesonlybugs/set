@@ -217,7 +217,7 @@ func TestValue_fillNestedStructPointerToSlicesAsPointers(t *testing.T) {
         // The "employees" key is reused here but now it is going into a single struct pointer; the
         // last set of data in Getter( "employees" ) wins, aka Sally.
         LastEmployee *Person    `key:"employees"`
-        // Note the "slice" key in the getter is not a []map] itself; but a single *Person is
+        // Note the "slice" key in the getter is not a []map itself; but a single *Person is
         // created and inserted into Company.Slice.
         Slice        *[]*Person `key:"slice"`
     }

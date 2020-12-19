@@ -555,3 +555,25 @@ func TestCoerceToString(t *testing.T) {
 		}
 	}
 }
+
+func TestCoerce_codeCoverage(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	var f float64
+	var i int64
+	var u uint64
+	//
+	err = coerce(reflect.ValueOf(f), reflect.ValueOf("Hi"))
+	chk.Error(err)
+	err = coerce(reflect.Indirect(reflect.ValueOf(&f)), reflect.ValueOf("Hi"))
+	chk.Error(err)
+	err = coerce(reflect.Indirect(reflect.ValueOf(&i)), reflect.ValueOf("Hi"))
+	chk.Error(err)
+	err = coerce(reflect.Indirect(reflect.ValueOf(&u)), reflect.ValueOf("Hi"))
+	chk.Error(err)
+	err = coerce(reflect.Indirect(reflect.ValueOf(&u)), reflect.ValueOf(-42))
+	chk.Error(err)
+	_, ok := coerceType(reflect.ValueOf(struct{}{}))
+	chk.Equal(false, ok)
+}

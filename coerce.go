@@ -12,6 +12,13 @@ import (
 //	func( target, value ) error {
 //		// The data in value is coerced into the type for target and assigned to target.
 //	}
+//
+// The following provisions hold true for all functions in this map and should help to keep
+// them lean.
+//	+ It is taken as a given that these functions are called within a defer...recover construct
+//		and can not crash the program.
+//	+ It is taken as a given that these functions do not need to zero out target to a zero
+//		value as that is done before they are called.
 var coercions = map[string]func(reflect.Value, reflect.Value) error{
 	"float-to-bool": func(target reflect.Value, value reflect.Value) error {
 		if value.Float() != 0 {
@@ -34,7 +41,6 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 			target.SetBool(parsed)
 			return nil
 		} else {
-			target.Set(reflect.Zero(reflect.TypeOf(false)))
 			return errors.Go(err)
 		}
 	},
@@ -56,40 +62,20 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		return nil
 	},
 	"int-to-float": func(target reflect.Value, value reflect.Value) error {
-		target.SetFloat(0) // Zero out
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.Errorf("%v", r)
-				}
-			}()
-			target.SetFloat(float64(value.Int()))
-		}()
-		return err
+		target.SetFloat(float64(value.Int()))
+		return nil
 	},
 	"string-to-float": func(target reflect.Value, value reflect.Value) error {
-		target.SetFloat(0) // Zero out
 		if parsed, err := strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
 			target.SetFloat(parsed)
 			return nil
 		} else {
-			target.SetFloat(float64(0))
 			return errors.Go(err)
 		}
 	},
 	"uint-to-float": func(target reflect.Value, value reflect.Value) error {
-		target.SetFloat(0) // Zero out
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.Errorf("%v", r)
-				}
-			}()
-			target.SetFloat(float64(value.Uint()))
-		}()
-		return err
+		target.SetFloat(float64(value.Uint()))
+		return nil
 	},
 
 	"bool-to-int": func(target reflect.Value, value reflect.Value) error {
@@ -101,46 +87,25 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		return nil
 	},
 	"float-to-int": func(target reflect.Value, value reflect.Value) error {
-		target.SetInt(0) // Zero out
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.Errorf("%v", r)
-				}
-			}()
-			target.SetInt(int64(value.Float()))
-		}()
-		return err
+		target.SetInt(int64(value.Float()))
+		return nil
 	},
 	"string-to-int": func(target reflect.Value, value reflect.Value) error {
-		target.SetInt(0) // Zero out
 		if parsed, err := strconv.ParseInt(value.String(), 0, target.Type().Bits()); err == nil {
 			target.SetInt(parsed)
-			return nil
 		} else if parsedFloat, err := strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
 			target.SetInt(int64(parsedFloat))
-			return nil
 		} else {
 			return errors.Go(err)
 		}
+		return nil
 	},
 	"uint-to-int": func(target reflect.Value, value reflect.Value) error {
-		target.SetInt(0) // Zero out
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.Errorf("%v", r)
-				}
-			}()
-			target.SetInt(int64(value.Uint()))
-		}()
-		return err
+		target.SetInt(int64(value.Uint()))
+		return nil
 	},
 
 	"bool-to-uint": func(target reflect.Value, value reflect.Value) error {
-		target.SetUint(0) // Zero out
 		if value.Bool() {
 			target.SetUint(1)
 		} else {
@@ -149,51 +114,33 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		return nil
 	},
 	"float-to-uint": func(target reflect.Value, value reflect.Value) error {
-		target.SetUint(0) // Zero out
-		var err error
 		if value.Float() < 0 {
-			err = errors.Errorf("Can not coerce negative float to uint.")
+			return errors.Errorf("Can not coerce negative float to uint.")
 		} else {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err = errors.Errorf("%v", r)
-					}
-				}()
-				target.SetUint(uint64(value.Float()))
-			}()
+			target.SetUint(uint64(value.Float()))
 		}
-		return err
+		return nil
 	},
 	"int-to-uint": func(target reflect.Value, value reflect.Value) error {
-		target.SetUint(0) // Zero out
-		var err error
 		if value.Int() < 0 {
-			err = errors.Errorf("Can not coerce negative int to uint.")
+			return errors.Errorf("Can not coerce negative int to uint.")
 		} else {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err = errors.Errorf("%v", r)
-					}
-				}()
-				target.SetUint(uint64(value.Int()))
-			}()
-
+			target.SetUint(uint64(value.Int()))
 		}
-		return err
+		return nil
 	},
 	"string-to-uint": func(target reflect.Value, value reflect.Value) error {
-		target.SetUint(0) // Zero out
+		var parsed uint64
+		var parsedFloat float64
 		var err error
 		if len(value.String()) > 0 && rune(value.String()[0]) == '-' {
-			err = errors.Errorf("Can not coerce negative number to uint.")
-		} else if parsed, err := strconv.ParseUint(value.String(), 0, target.Type().Bits()); err == nil {
+			return errors.Errorf("Can not coerce negative number to uint.")
+		} else if parsed, err = strconv.ParseUint(value.String(), 0, target.Type().Bits()); err == nil {
 			target.SetUint(parsed)
-		} else if parsedFloat, err := strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
+		} else if parsedFloat, err = strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
 			target.SetUint(uint64(parsedFloat))
 		} else {
-			err = errors.Go(err)
+			return errors.Go(err)
 		}
 		return err
 	},
@@ -264,7 +211,17 @@ func coerce(target reflect.Value, value reflect.Value) error {
 	to, _ := coerceType(target)
 	from, _ := coerceType(value)
 	if fn, ok := coercions[from+"-to-"+to]; ok {
-		return fn(target, value)
+		var err error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = errors.Errorf("Recovered %v", r)
+				}
+			}()
+			target.Set(reflect.Zero(target.Type()))
+			err = fn(target, value)
+		}()
+		return err
 	} else {
 		return errors.Errorf("Type coercion from %v to %v unsupported.", from, to)
 	}

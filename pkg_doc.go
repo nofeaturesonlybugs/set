@@ -18,7 +18,7 @@
 // I called this package `set` because I like typing short identifiers and I don't really use
 // packages that implement logical set operations such as union or intersection.
 //
-// I also like the semantics of type: set.V().To() // i.e. set value to
+// I also like the semantics of typing: set.V().To() // i.e. set value to
 //
 // If you find yourself dealing with name collision here are some alternate imports
 // that are still short and keep the semantics (with varying success):
