@@ -37,12 +37,13 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		return nil
 	},
 	"string-to-bool": func(target reflect.Value, value reflect.Value) error {
-		if parsed, err := strconv.ParseBool(value.String()); err == nil {
-			target.SetBool(parsed)
-			return nil
-		} else {
+		var err error
+		var parsed bool
+		if parsed, err = strconv.ParseBool(value.String()); err != nil {
 			return errors.Go(err)
 		}
+		target.SetBool(parsed)
+		return nil
 	},
 	"uint-to-bool": func(target reflect.Value, value reflect.Value) error {
 		if value.Uint() != 0 {
@@ -66,12 +67,13 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		return nil
 	},
 	"string-to-float": func(target reflect.Value, value reflect.Value) error {
-		if parsed, err := strconv.ParseFloat(value.String(), target.Type().Bits()); err == nil {
-			target.SetFloat(parsed)
-			return nil
-		} else {
+		var err error
+		var parsed float64
+		if parsed, err = strconv.ParseFloat(value.String(), target.Type().Bits()); err != nil {
 			return errors.Go(err)
 		}
+		target.SetFloat(parsed)
+		return nil
 	},
 	"uint-to-float": func(target reflect.Value, value reflect.Value) error {
 		target.SetFloat(float64(value.Uint()))
@@ -116,17 +118,15 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 	"float-to-uint": func(target reflect.Value, value reflect.Value) error {
 		if value.Float() < 0 {
 			return errors.Errorf("Can not coerce negative float to uint.")
-		} else {
-			target.SetUint(uint64(value.Float()))
 		}
+		target.SetUint(uint64(value.Float()))
 		return nil
 	},
 	"int-to-uint": func(target reflect.Value, value reflect.Value) error {
 		if value.Int() < 0 {
 			return errors.Errorf("Can not coerce negative int to uint.")
-		} else {
-			target.SetUint(uint64(value.Int()))
 		}
+		target.SetUint(uint64(value.Int()))
 		return nil
 	},
 	"string-to-uint": func(target reflect.Value, value reflect.Value) error {
@@ -222,7 +222,6 @@ func coerce(target reflect.Value, value reflect.Value) error {
 			err = fn(target, value)
 		}()
 		return err
-	} else {
-		return errors.Errorf("Type coercion from %v to %v unsupported.", from, to)
 	}
+	return errors.Errorf("Type coercion from %v to %v unsupported.", from, to)
 }

@@ -7,14 +7,18 @@ import (
 	"github.com/nofeaturesonlybugs/errors"
 )
 
+// Assert implements just enough github.com/stretchr/testify/assert functionality to test this package.  The source package
+// has a more limited set of Go versions I'd like to support.
 type Assert struct {
 	t *testing.T
 }
 
+// New creates a new assert type.
 func New(t *testing.T) *Assert {
 	return &Assert{t}
 }
 
+// Equal checks if expected == actual.
 func (me *Assert) Equal(expected, actual interface{}) {
 	if expected != actual {
 		stack := errors.Stack()[1]
@@ -22,6 +26,7 @@ func (me *Assert) Equal(expected, actual interface{}) {
 	}
 }
 
+// NotEqual checks if expected != actual.
 func (me *Assert) NotEqual(expected, actual interface{}) {
 	if expected == actual {
 		stack := errors.Stack()[1]
@@ -29,6 +34,7 @@ func (me *Assert) NotEqual(expected, actual interface{}) {
 	}
 }
 
+// Error checks if err is an error.
 func (me *Assert) Error(err error) {
 	if err == nil {
 		stack := errors.Stack()[1]
@@ -36,6 +42,7 @@ func (me *Assert) Error(err error) {
 	}
 }
 
+// NoError checks if err is not an error.
 func (me *Assert) NoError(err error) {
 	if err != nil {
 		stack := errors.Stack()[1]
@@ -43,6 +50,7 @@ func (me *Assert) NoError(err error) {
 	}
 }
 
+// InDelta checks that (expected - delta) <= actual <= (expected + delta)
 func (me *Assert) InDelta(expected interface{}, actual interface{}, delta interface{}) {
 	var e, a, d float64
 	switch t := expected.(type) {
@@ -75,6 +83,7 @@ func (me *Assert) InDelta(expected interface{}, actual interface{}, delta interf
 	}
 }
 
+// NotNil checks that v is not nil.
 func (me *Assert) NotNil(v interface{}) {
 	if v == nil {
 		stack := errors.Stack()[1]
@@ -82,17 +91,17 @@ func (me *Assert) NotNil(v interface{}) {
 	}
 }
 
+// Nil checks that v is nil or a nillable value set to nil (such as a nil map, nil slice, etc).
 func (me *Assert) Nil(v interface{}) {
 	if v == nil {
 		return
-	} else {
-		value := reflect.ValueOf(v)
-		k := value.Kind()
-		nillable := k == reflect.Chan || k == reflect.Func || k == reflect.Interface || k == reflect.Map || k == reflect.Ptr || k == reflect.Slice
-		if nillable && value.IsNil() {
-			return
-		}
-		stack := errors.Stack()[1]
-		me.t.Errorf("Failed Nil() @ %v:%v", stack.Line, stack.Function)
 	}
+	value := reflect.ValueOf(v)
+	k := value.Kind()
+	nillable := k == reflect.Chan || k == reflect.Func || k == reflect.Interface || k == reflect.Map || k == reflect.Ptr || k == reflect.Slice
+	if nillable && value.IsNil() {
+		return
+	}
+	stack := errors.Stack()[1]
+	me.t.Errorf("Failed Nil() @ %v:%v", stack.Line, stack.Function)
 }

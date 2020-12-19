@@ -136,28 +136,27 @@ type Value struct {
 func (me *Value) Append(items ...interface{}) error {
 	if !me.IsSlice {
 		return nil
-	} else {
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = errors.Errorf("%v", r)
-				}
-			}()
-			zero := reflect.Zero(me.pt)
-			for _, item := range items {
-				elem := reflect.New(me.pt.Elem())
-				elemAsValue := V(elem)
-				if err = elemAsValue.To(item); err != nil {
-					err = errors.Go(err)
-					return
-				}
-				zero = reflect.Append(zero, reflect.Indirect(elemAsValue.v))
-			}
-			me.pv.Set(reflect.AppendSlice(me.pv, zero))
-		}()
-		return err
 	}
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = errors.Errorf("%v", r)
+			}
+		}()
+		zero := reflect.Zero(me.pt)
+		for _, item := range items {
+			elem := reflect.New(me.pt.Elem())
+			elemAsValue := V(elem)
+			if err = elemAsValue.To(item); err != nil {
+				err = errors.Go(err)
+				return
+			}
+			zero = reflect.Append(zero, reflect.Indirect(elemAsValue.v))
+		}
+		me.pv.Set(reflect.AppendSlice(me.pv, zero))
+	}()
+	return err
 }
 
 // Fields returns a slice of Field structs when Value is wrapped around a struct; for all other values
@@ -284,10 +283,9 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 func (me *Value) Zero() error {
 	if !me.canSet {
 		return errors.Errorf(me.canSetError)
-	} else {
-		me.pv.Set(reflect.Zero(me.pt))
-		return nil
 	}
+	me.pv.Set(reflect.Zero(me.pt))
+	return nil
 }
 
 // To attempts to assign the argument into Value; Value is always set to the Zero value for its type before
