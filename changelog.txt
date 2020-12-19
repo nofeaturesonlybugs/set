@@ -1,5 +1,8 @@
 /develop
 
+0.1.1
+    + Refactoring and increase code coverage.
+
 0.1.0
     + Add types:
         + Value - sets data to scalars, slices, and structs with type coercion if necessary.
