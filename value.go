@@ -172,6 +172,30 @@ func (me *Value) Fields() []Field {
 	return rv
 }
 
+// FieldByIndex returns the nested field corresponding to index.  Nested structs are instantiated along the way
+// if they are pointers.
+func (me *Value) FieldByIndex(index []int) (*Value, error) {
+	if me == nil {
+		return nil, errors.NilReceiver()
+	} else if !me.IsStruct {
+		return nil, errors.Errorf("Value.FieldByIndex() requires internal type to be struct but type is %v", me.pt)
+	} else if !me.canSet {
+		return nil, errors.Errorf(me.canSetError)
+	} else if len(index) == 0 {
+		return nil, errors.Errorf("Zero length index provided to FieldByIndex()")
+	}
+	k, remaining := index[0], index[1:]
+	if k > me.pv.NumField() {
+		return nil, errors.Errorf("Index out of bounds; field is len %v and index is %v", me.pv.NumField(), k)
+	}
+	field := V(me.pv.Field(k))
+	if len(remaining) > 0 {
+		return field.FieldByIndex(remaining)
+	} else {
+		return field, nil
+	}
+}
+
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
 // TagValue member of Field will be set to the tag's value.
 func (me *Value) FieldsByTag(key string) []Field {
