@@ -16,3 +16,21 @@ func NewTypeList(args ...interface{}) TypeList {
 	}
 	return rv
 }
+
+// Has returns true if the specified type is in the list.
+func (list TypeList) Has(T reflect.Type) bool {
+	if list == nil {
+		return false
+	}
+	_, has := list[T]
+	return has
+}
+
+// Merge adds entries in `from` to this list.
+func (list TypeList) Merge(from TypeList) {
+	if list != nil {
+		for k, v := range from {
+			list[k] = v
+		}
+	}
+}
