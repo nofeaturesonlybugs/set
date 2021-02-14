@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/nofeaturesonlybugs/errors"
 )
 
 // Mapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
@@ -17,12 +19,12 @@ type Mapping map[string][]int
 // structure using string keys.
 type Mapper struct {
 	// A slice of type instances that should be ignored during name generation.
-	Ignored []interface{}
+	Ignored TypeList
 	//
 	// During name generation types in the `Elevated` member will not have the name affected
 	// by the struct field name or data type.  Use this for struct members or embedded structs
 	// when you do not want their name or type affecting the generated name.
-	Elevated []interface{}
+	Elevated TypeList
 	//
 	// A list of struct tags that will be used for name generation in order of preference.
 	// An example would be using this feature for both JSON and DB field name specification.
@@ -40,70 +42,44 @@ type Mapper struct {
 	Transform func(string) string
 
 	//
-	mut      sync.RWMutex
-	ready    bool
-	elevated map[reflect.Type]struct{} // Types that are elevated.
-	ignored  map[reflect.Type]struct{} // Types that are ignored.
-	known    map[reflect.Type]Mapping  // Types that are known -- i.e. we've already created the mapping.
+	mut   sync.RWMutex
+	known map[reflect.Type]Mapping // Types that are known -- i.e. we've already created the mapping.
 }
 
-var DefaultStructMapper = &Mapper{
+var DefaultMapper = &Mapper{
 	Join: "_",
 }
 
-// init initializes some internal members.
-func (me *Mapper) init() {
+// Map adds T to the StructMapper's list of known and recognized types.
+func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me == nil {
-		return
+		return nil, errors.NilReceiver()
 	}
-	me.mut.RLock()
-	if me.ready {
-		me.mut.RUnlock()
-		return
+	var v *Value
+	if tv, ok := T.(*Value); ok {
+		v = tv
 	} else {
-		me.mut.RUnlock()
-		me.mut.Lock()
-		defer me.mut.Unlock()
-		//
-		me.ignored = map[reflect.Type]struct{}{}
-		me.elevated = map[reflect.Type]struct{}{}
-		me.known = make(map[reflect.Type]Mapping)
-		for _, value := range me.Ignored {
-			me.ignored[reflect.TypeOf(value)] = struct{}{}
-		}
-		for _, value := range me.Elevated {
-			me.elevated[reflect.TypeOf(value)] = struct{}{}
-		}
-	}
-}
-
-// Register adds T to the StructMapper's list of known and recognized types.
-func (me *Mapper) Register(T interface{}) Mapping {
-	me.init()
-	rv := make(Mapping)
-	if me == nil {
-		return rv
+		v = V(T)
 	}
 	//
-	v := V(T)
-	//
-	// Before we scan we can check if this is a known type; if so just return our previous scan.
 	me.mut.RLock()
 	if rv, ok := me.known[v.pt]; ok {
 		me.mut.RUnlock()
-		return rv
+		return rv, nil
 	}
-	me.mut.RUnlock() // If we make it here it is not known; release the lock so we can acquire Write lock.
+	me.mut.RUnlock()
+	//
+	rv := make(Mapping)
 	//
 	var scan func(v *Value, indeces []int, prefix string, indent int)
 	scan = func(v *Value, indeces []int, prefix string, indent int) {
 		for k, field := range v.Fields() {
-			if _, found := me.ignored[field.Value.pt]; found {
+			if me.Ignored.Has(field.Value.pt) {
 				continue
 			}
 			//
 			name := ""
-			if _, found := me.elevated[field.Value.pt]; !found {
+			if !me.Elevated.Has(field.Value.pt) {
 				for _, tagName := range append(me.Tags, "") {
 					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
 						name = tagValue
@@ -132,12 +108,18 @@ func (me *Mapper) Register(T interface{}) Mapping {
 	}
 	scan(v, []int{}, "", 0)
 	//
+	// Acquiring the write lock is delayed until after scanning because the desired use case is faster
+	// reads; the following lines are the smallest set in which the lock *MUST* be held.
+	//
 	// Our scan is complete so now we should assign the result to our known types.
 	me.mut.Lock()
 	defer me.mut.Unlock()
+	if me.known == nil {
+		me.known = make(map[reflect.Type]Mapping)
+	}
 	me.known[v.pt] = rv
 	//
-	return rv
+	return rv, nil
 }
 
 // Get returns the indeces associated with key in the mapping.  If no such key

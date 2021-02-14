@@ -9,7 +9,7 @@ import (
 	"github.com/nofeaturesonlybugs/set/assert"
 )
 
-func TestStructMapper(t *testing.T) {
+func TestMapper(t *testing.T) {
 	chk := assert.New(t)
 	{
 		// Default options test to increase coverage.
@@ -18,7 +18,8 @@ func TestStructMapper(t *testing.T) {
 			B string
 		}
 		var data A
-		mapping := set.DefaultStructMapper.Register(&data)
+		mapping, err := set.DefaultMapper.Map(&data)
+		chk.NoError(err)
 		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 	}
@@ -46,13 +47,14 @@ func TestStructMapper(t *testing.T) {
 		}
 		var data Combined
 		mapper := &set.Mapper{
-			Ignored:   []interface{}{Logger{}},
-			Elevated:  []interface{}{CommonDb{}},
+			Ignored:   set.NewTypeList(Logger{}),
+			Elevated:  set.NewTypeList(CommonDb{}),
 			Tags:      []string{"db", "json"},
 			Join:      "_",
 			Transform: strings.ToLower,
 		}
-		mapping := mapper.Register(&data)
+		mapping, err := mapper.Map(&data)
+		chk.NoError(err)
 		//
 		chk.Equal("[0 0 0]", fmt.Sprintf("%v", mapping.Get("child_pk")))
 		chk.Equal("[0 0 1]", fmt.Sprintf("%v", mapping.Get("child_created_tmz")))
@@ -78,14 +80,22 @@ func TestStructMapper(t *testing.T) {
 	}
 }
 
-func TestStructMapperCodeCoverage(t *testing.T) {
+func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	var mapping set.Mapping
-	_, ok := mapping.Lookup("Hi")
-	chk.Equal(false, ok)
+	{
+		var mapping set.Mapping
+		_, ok := mapping.Lookup("Hi")
+		chk.Equal(false, ok)
+	}
+	{
+		var mapper *set.Mapper
+		mapping, err := mapper.Map(struct{}{})
+		chk.Error(err)
+		chk.Nil(mapping)
+	}
 }
 
-func ExampleStructMapper() {
+func ExampleMapper() {
 	type CommonDb struct {
 		Pk          int    `t:"pk"`
 		CreatedTime string `t:"created_time"`
@@ -99,10 +109,10 @@ func ExampleStructMapper() {
 	var data Person
 	{
 		mapper := &set.Mapper{
-			Elevated: []interface{}{CommonDb{}},
+			Elevated: set.NewTypeList(CommonDb{}),
 			Join:     "_",
 		}
-		mapping := mapper.Register(&data)
+		mapping, _ := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
@@ -112,7 +122,7 @@ func ExampleStructMapper() {
 			Join:      ".",
 			Transform: strings.ToLower,
 		}
-		mapping := mapper.Register(&data)
+		mapping, _ := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
@@ -122,7 +132,7 @@ func ExampleStructMapper() {
 			Join: "_",
 			Tags: []string{"t"},
 		}
-		mapping := mapper.Register(&data)
+		mapping, _ := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 
