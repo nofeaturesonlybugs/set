@@ -9,7 +9,7 @@ import (
 	"github.com/nofeaturesonlybugs/set/assert"
 )
 
-func TestStructMapping(t *testing.T) {
+func TestStructMapper(t *testing.T) {
 	chk := assert.New(t)
 	{
 		// Default options test to increase coverage.
@@ -78,14 +78,14 @@ func TestStructMapping(t *testing.T) {
 	}
 }
 
-func TestStructMappingCodeCoverage(t *testing.T) {
+func TestStructMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	var mapping set.StructMapping
 	_, ok := mapping.Lookup("Hi")
 	chk.Equal(false, ok)
 }
 
-func ExampleStructMapping() {
+func ExampleStructMapper() {
 	type CommonDb struct {
 		Pk          int    `t:"pk"`
 		CreatedTime string `t:"created_time"`
