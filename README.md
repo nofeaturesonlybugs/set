@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/nofeaturesonlybugs/set/branch/master/graph/badge.svg)](https://codecov.io/gh/nofeaturesonlybugs/set)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Package `set` is a small wrapper around the official reflect package that facilitates loose type conversion and assignment into native Go types.
+Package `set` is a small wrapper around the official reflect package that facilitates loose type conversion, assignment into native Go types, and utilities to populate deeply nested Go structs.
 
 Read the `godoc` for more detailed explanations and examples but here are some enticing snippets.
 
