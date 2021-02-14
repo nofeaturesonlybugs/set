@@ -172,8 +172,11 @@ func (me *Value) Fields() []Field {
 	return rv
 }
 
-// FieldByIndex returns the nested field corresponding to index.  Nested structs are instantiated along the way
-// if they are pointers.
+// FieldByIndex returns the nested field corresponding to index.
+//
+// Key differences between this method and the built-in method on reflect.Value.FieldByIndex() are
+// the built-in causes panics while this one will return errors and this method will instantiate nil struct
+// members as it traverses.
 func (me *Value) FieldByIndex(index []int) (*Value, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
