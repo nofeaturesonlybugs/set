@@ -50,6 +50,9 @@ type Mapper struct {
 type BoundMapper interface {
 	// Field returns the *Value for field.
 	Field(field string) (*Value, error)
+	// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
+	// not the same then an error is returned.
+	Rebind(I interface{}) error
 	// Set effectively sets V[field] = value.
 	Set(field string, value interface{}) error
 }
@@ -203,6 +206,18 @@ type bound_mapper_t struct {
 func (me *bound_mapper_t) Field(field string) (*Value, error) {
 	// nil check is not necessary as bound_mapper_t is only created within this package.
 	return me.value.FieldByIndex(me.mapping.Get(field))
+}
+
+// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
+// not the same then an error is returned.
+func (me *bound_mapper_t) Rebind(I interface{}) error {
+	// nil check is not necessary as bound_mapper_t is only created within this package.
+	v := V(I)
+	if v.pt != me.value.pt {
+		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.pv.Interface(), v.pv.Interface())
+	}
+	me.value = v
+	return nil
 }
 
 // Set effectively sets V[field] = value.

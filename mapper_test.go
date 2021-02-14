@@ -170,6 +170,46 @@ func TestMapper_Bind(t *testing.T) {
 	}
 }
 
+func TestMapper_Bind_Rebind(t *testing.T) {
+	chk := assert.New(t)
+	//
+	{
+		type CommonDb struct {
+			Pk          int    `db:"pk" json:"id"`
+			CreatedTime string `db:"created_tmz" json:"created_time"`
+			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
+		}
+		type Person struct {
+			CommonDb
+			Name string
+			Age  int
+		}
+		var a, b Person
+		var other CommonDb
+		mapper := &set.Mapper{
+			Elevated: set.NewTypeList(CommonDb{}),
+		}
+		bound, err := mapper.Bind(&a)
+		chk.NoError(err)
+		chk.NotNil(bound)
+		//
+		err = bound.Set("Pk", 10)
+		chk.NoError(err)
+		chk.Equal(10, a.Pk)
+		//
+		err = bound.Rebind(&b)
+		chk.NoError(err)
+		err = bound.Set("Pk", 20)
+		chk.NoError(err)
+		chk.Equal(20, b.Pk)
+		//
+		chk.NotEqual(a.Pk, b.Pk)
+		//
+		err = bound.Rebind(&other)
+		chk.Error(err)
+	}
+}
+
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	{ // Tests case where receiver is nil when calling Mapping.Lookup
