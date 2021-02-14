@@ -1184,6 +1184,155 @@ func TestValue_fillNestedPointersByMapWithNils(t *testing.T) {
 	}
 }
 
+func TestValue_fieldByIndex(t *testing.T) {
+	chk := assert.New(t)
+	var field *set.Value
+	var err error
+	{ // No pointers.
+		type CommonDb struct {
+			Pk          int    `db:"pk" json:"id"`
+			CreatedTime string `db:"created_tmz" json:"created_time"`
+			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
+		}
+		type Person struct {
+			CommonDb
+			Name string
+			Age  int
+		}
+		type Combined struct {
+			Child     Person
+			Parent    Person
+			Emergency Person `db:"Emergency"`
+		}
+		var data Combined
+		outer := set.V(&data)
+		//
+		// Combined.Child.Pk
+		field, err = outer.FieldByIndex([]int{0, 0, 0})
+		chk.NoError(err)
+		chk.NotNil(field)
+		err = field.To(15)
+		chk.NoError(err)
+		chk.Equal(15, data.Child.Pk)
+		// Combined.Emergency.Name
+		field, err = outer.FieldByIndex([]int{2, 1})
+		chk.NoError(err)
+		chk.NotNil(field)
+		err = field.To("Bob")
+		chk.NoError(err)
+		chk.Equal("Bob", data.Emergency.Name)
+	}
+	{ // Pointers.
+		type CommonDb struct {
+			Pk          int    `db:"pk" json:"id"`
+			CreatedTime string `db:"created_tmz" json:"created_time"`
+			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
+		}
+		type Person struct {
+			*CommonDb
+			Name string
+			Age  int
+		}
+		type Combined struct {
+			Child     *Person
+			Parent    *Person
+			Emergency *Person `db:"Emergency"`
+		}
+		var data Combined
+		outer := set.V(&data)
+		set := func(indeces []int, arg interface{}) {
+			field, err = outer.FieldByIndex(indeces)
+			chk.NoError(err)
+			chk.NotNil(field)
+			err = field.To(arg)
+			chk.NoError(err)
+		}
+		//
+		set([]int{0, 0, 0}, 1)
+		set([]int{0, 0, 1}, "0c")
+		set([]int{0, 0, 2}, "0u")
+		set([]int{0, 1}, "Bob")
+		set([]int{0, 2}, 5)
+		//
+		set([]int{1, 0, 0}, 5)
+		set([]int{1, 0, 1}, "5c")
+		set([]int{1, 0, 2}, "5u")
+		set([]int{1, 1}, "Sally")
+		set([]int{1, 2}, 30)
+		//
+		set([]int{2, 0, 0}, 90)
+		set([]int{2, 0, 1}, "90c")
+		set([]int{2, 0, 2}, "90u")
+		set([]int{2, 1}, "Suzy")
+		set([]int{2, 2}, 25)
+		//
+		chk.Equal(1, data.Child.Pk)
+		chk.Equal("0c", data.Child.CreatedTime)
+		chk.Equal("0u", data.Child.UpdatedTime)
+		chk.Equal("Bob", data.Child.Name)
+		chk.Equal(5, data.Child.Age)
+		//
+		chk.Equal(5, data.Parent.Pk)
+		chk.Equal("5c", data.Parent.CreatedTime)
+		chk.Equal("5u", data.Parent.UpdatedTime)
+		chk.Equal("Sally", data.Parent.Name)
+		chk.Equal(30, data.Parent.Age)
+		//
+		chk.Equal(90, data.Emergency.Pk)
+		chk.Equal("90c", data.Emergency.CreatedTime)
+		chk.Equal("90u", data.Emergency.UpdatedTime)
+		chk.Equal("Suzy", data.Emergency.Name)
+		chk.Equal(25, data.Emergency.Age)
+		//
+		// Index out of bounds
+		field, err = outer.FieldByIndex([]int{0, 0, 4})
+		chk.Nil(field)
+		chk.Error(err)
+		field, err = outer.FieldByIndex([]int{0, 6})
+		chk.Nil(field)
+		chk.Error(err)
+		field, err = outer.FieldByIndex([]int{10})
+		chk.Nil(field)
+		chk.Error(err)
+	}
+}
+
+func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	var err error
+	var value, field *set.Value
+	type A struct {
+		A string
+	}
+	type B struct {
+		B string
+		A
+	}
+	var a A
+
+	field, err = value.FieldByIndex(nil)
+	chk.Error(err)
+	chk.Nil(field)
+	//
+	value = set.V(map[string]string{})
+	field, err = value.FieldByIndex(nil)
+	chk.Error(err)
+	chk.Nil(field)
+	//
+	value = set.V(a)
+	field, err = value.FieldByIndex([]int{0})
+	chk.Error(err)
+	chk.Nil(field)
+	//
+	value = set.V(&a)
+	field, err = value.FieldByIndex(nil)
+	chk.Error(err)
+	chk.Nil(field)
+	field, err = value.FieldByIndex([]int{})
+	chk.Error(err)
+	chk.Nil(field)
+}
+
 func TestValue_fillCodeCoverageErrors(t *testing.T) {
 	chk := assert.New(t)
 	//
