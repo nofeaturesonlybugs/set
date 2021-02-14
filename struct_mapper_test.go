@@ -45,7 +45,7 @@ func TestStructMapper(t *testing.T) {
 			Logger
 		}
 		var data Combined
-		mapper := &set.StructMapper{
+		mapper := &set.Mapper{
 			Ignored:   []interface{}{Logger{}},
 			Elevated:  []interface{}{CommonDb{}},
 			Tags:      []string{"db", "json"},
@@ -80,7 +80,7 @@ func TestStructMapper(t *testing.T) {
 
 func TestStructMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	var mapping set.StructMapping
+	var mapping set.Mapping
 	_, ok := mapping.Lookup("Hi")
 	chk.Equal(false, ok)
 }
@@ -98,7 +98,7 @@ func ExampleStructMapper() {
 	}
 	var data Person
 	{
-		mapper := &set.StructMapper{
+		mapper := &set.Mapper{
 			Elevated: []interface{}{CommonDb{}},
 			Join:     "_",
 		}
@@ -108,7 +108,7 @@ func ExampleStructMapper() {
 	{
 		fmt.Println("")
 		fmt.Println("lowercase with dot separators")
-		mapper := &set.StructMapper{
+		mapper := &set.Mapper{
 			Join:      ".",
 			Transform: strings.ToLower,
 		}
@@ -118,7 +118,7 @@ func ExampleStructMapper() {
 	{
 		fmt.Println("")
 		fmt.Println("specify tags")
-		mapper := &set.StructMapper{
+		mapper := &set.Mapper{
 			Join: "_",
 			Tags: []string{"t"},
 		}
