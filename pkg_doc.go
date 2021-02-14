@@ -32,7 +32,7 @@
 //		will "github.com/nofeaturesonlybugs/set"
 //	)
 //
-// Package Info
+// Basic Type Coercion
 //
 // A simple example with type coercion:
 // 	b, i := true, 42
@@ -141,7 +141,7 @@
 //	set.V(&t).To(s) // t is []int{} because "Hello" can not coerce.
 //
 //
-// Populating Structs
+// Populating Structs with Value.Fill() and a Getter
 //
 // Structs can be populated by using Value.Fill() and a Getter; note the function is type casted to
 // a set.GetterFunc.
@@ -174,7 +174,7 @@
 // 	var t T
 // 	set.V(&t).FillByTag("key", myGetter)
 //
-// Populating Nested Structs
+// Populating Nested Structs with Value.Fill() and a Getter
 //
 // To populate nested structs a Getter needs to return a Getter for the given name:
 // 	myGetter := set.GetterFunc(func(key string) interface{} {
@@ -254,6 +254,17 @@
 // 	}
 // 	var t Person
 // 	set.V(&t).FillByTag("key", myGetter)
+//
+// Populating Structs with Mapper, Mapping, and BoundMap
+//
+// If you need to populate or traverse structs using strings as lookups consider using a Mapper.  A Mapper traverses a type T
+// and generates a Mapping, where a Mapping is currently implemented as a map[string][]int.
+//
+// When you index into a Mapping you will receive a slice of ints representing the indeces into the nested structure
+// to the desired field.
+//
+// For convenience a Mapper can create a BoundMapping which binds the Mapping to an instance of T.  The BoundMapping
+// can then be used to update the data within the instance.  See the BoundMapping examples.
 //
 // Examples Subdirectory
 //

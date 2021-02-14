@@ -8,6 +8,64 @@ Package `set` is a small wrapper around the official reflect package that facili
 
 Read the `godoc` for more detailed explanations and examples but here are some enticing snippets.
 
+## Mapper and Mapping for Nested Struct Access
+`Mapper` traverses a nested struct hierarchy to generate a `Mapping`.  From a `Mapping` you can use `string` keys to
+access the struct members by `struct field index`.
+```go
+type CommonDb struct {
+    Pk          int    `t:"pk"`
+    CreatedTime string `t:"created_time"`
+    UpdatedTime string `t:"updated_time"`
+}
+type Person struct {
+    CommonDb `t:"common"`
+    Name     string `t:"name"`
+    Age      int    `t:"age"`
+}
+var data Person
+```
+Depending on the `Mapper` options the following mappings can be created:
+```go
+// Type CommonDb doesn't affect names; join nestings with "_"
+mapper := &set.Mapper{
+    Elevated: set.NewTypeList(CommonDb{}),
+    Join:     "_",
+}
+generates = `
+[0 0] Pk
+[0 1] CreatedTime
+[0 2] UpdatedTime
+[1] Name
+[2] Age
+`
+
+// lowercase with dot separators
+mapper := &set.Mapper{
+    Join:      ".",
+    Transform: strings.ToLower,
+}
+generates = `
+[0 0] commondb.pk
+[0 1] commondb.createdtime
+[0 2] commondb.updatedtime
+[1] name
+[2] age
+`
+
+// specify tags
+mapper := &set.Mapper{
+    Join: "_",
+    Tags: []string{"t"},
+}
+generates = `
+[0 0] common_pk
+[0 1] common_created_time
+[0 2] common_updated_time
+[1] name
+[2] age
+`
+```
+
 ## Scalars and Type-Coercion
 ```go
 {
