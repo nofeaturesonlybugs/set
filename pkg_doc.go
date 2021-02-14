@@ -1,5 +1,5 @@
-// Package set is a small wrapper around the official reflect package that facilitates loose type conversion and assignment
-// into native Go types.
+// Package set is a small wrapper around the official reflect package that facilitates loose type conversion,
+// assignment into native Go types, and utilities to populate deeply nested Go structs.
 //
 // Data Types
 //
