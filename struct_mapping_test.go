@@ -18,7 +18,7 @@ func TestStructMapping(t *testing.T) {
 			B string
 		}
 		var data A
-		mapping := set.NewStructMapping(set.V(&data), nil)
+		mapping := set.DefaultStructMapper.Register(&data)
 		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 	}
@@ -45,14 +45,14 @@ func TestStructMapping(t *testing.T) {
 			Logger
 		}
 		var data Combined
-		opts := &set.StructMappingOptions{
+		mapper := &set.StructMapper{
 			Ignored:   []interface{}{Logger{}},
 			Elevated:  []interface{}{CommonDb{}},
 			Tags:      []string{"db", "json"},
 			Join:      "_",
 			Transform: strings.ToLower,
 		}
-		mapping := set.NewStructMapping(set.V(&data), opts)
+		mapping := mapper.Register(&data)
 		//
 		chk.Equal("[0 0 0]", fmt.Sprintf("%v", mapping.Get("child_pk")))
 		chk.Equal("[0 0 1]", fmt.Sprintf("%v", mapping.Get("child_created_tmz")))
@@ -80,7 +80,7 @@ func TestStructMapping(t *testing.T) {
 
 func TestStructMappingCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	var mapping *set.StructMapping
+	var mapping set.StructMapping
 	_, ok := mapping.Lookup("Hi")
 	chk.Equal(false, ok)
 }
@@ -98,31 +98,31 @@ func ExampleStructMapping() {
 	}
 	var data Person
 	{
-		opts := &set.StructMappingOptions{
+		mapper := &set.StructMapper{
 			Elevated: []interface{}{CommonDb{}},
 			Join:     "_",
 		}
-		mapping := set.NewStructMapping(set.V(&data), opts)
+		mapping := mapper.Register(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
 		fmt.Println("")
 		fmt.Println("lowercase with dot separators")
-		opts := &set.StructMappingOptions{
+		mapper := &set.StructMapper{
 			Join:      ".",
 			Transform: strings.ToLower,
 		}
-		mapping := set.NewStructMapping(set.V(&data), opts)
+		mapping := mapper.Register(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
 		fmt.Println("")
 		fmt.Println("specify tags")
-		opts := &set.StructMappingOptions{
+		mapper := &set.StructMapper{
 			Join: "_",
 			Tags: []string{"t"},
 		}
-		mapping := set.NewStructMapping(set.V(&data), opts)
+		mapping := mapper.Register(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 

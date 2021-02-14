@@ -5,16 +5,17 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 )
 
-// StructMapping traverses nested structures and generates a mapping of Key-to-Indeces where:
+// StructMapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
 //	Key is a string key representing a common or friendly name for the nested struct member.
 //	Indeces is an []int that can be used to index to the proper struct member.
-type StructMapping struct {
-	mapping map[string][]int
-}
+type StructMapping map[string][]int
 
-type StructMappingOptions struct {
+// StructMapper is used to traverse structures to create StructMapping and then navigate the nested
+// structure using string keys.
+type StructMapper struct {
 	// A slice of type instances that should be ignored during name generation.
 	Ignored []interface{}
 	//
@@ -37,53 +38,87 @@ type StructMappingOptions struct {
 	// the generated name.  This function can perform string alteration to force all
 	// names to lowercase, string replace, etc.
 	Transform func(string) string
+
+	//
+	mut      sync.RWMutex
+	ready    bool
+	elevated map[reflect.Type]struct{}      // Types that are elevated.
+	ignored  map[reflect.Type]struct{}      // Types that are ignored.
+	known    map[reflect.Type]StructMapping // Types that are known -- i.e. we've already created the mapping.
 }
 
-var DefaultStructMappingOptions = &StructMappingOptions{
+var DefaultStructMapper = &StructMapper{
 	Join: "_",
 }
 
-func NewStructMapping(v *Value, options *StructMappingOptions) *StructMapping {
-	if options == nil {
-		options = DefaultStructMappingOptions
+// init initializes some internal members.
+func (me *StructMapper) init() {
+	if me == nil {
+		return
 	}
-	rv := &StructMapping{
-		mapping: map[string][]int{},
+	me.mut.RLock()
+	if me.ready {
+		me.mut.RUnlock()
+		return
+	} else {
+		me.mut.RUnlock()
+		me.mut.Lock()
+		defer me.mut.Unlock()
+		//
+		me.ignored = map[reflect.Type]struct{}{}
+		me.elevated = map[reflect.Type]struct{}{}
+		me.known = make(map[reflect.Type]StructMapping)
+		for _, value := range me.Ignored {
+			me.ignored[reflect.TypeOf(value)] = struct{}{}
+		}
+		for _, value := range me.Elevated {
+			me.elevated[reflect.TypeOf(value)] = struct{}{}
+		}
+	}
+}
+
+// Register adds T to the StructMapper's list of known and recognized types.
+func (me *StructMapper) Register(T interface{}) StructMapping {
+	me.init()
+	rv := make(StructMapping)
+	if me == nil {
+		return rv
 	}
 	//
-	ignored := map[reflect.Type]struct{}{}
-	elevated := map[reflect.Type]struct{}{}
-	for _, value := range options.Ignored {
-		ignored[reflect.TypeOf(value)] = struct{}{}
+	v := V(T)
+	//
+	// Before we scan we can check if this is a known type; if so just return our previous scan.
+	me.mut.RLock()
+	if rv, ok := me.known[v.pt]; ok {
+		me.mut.RUnlock()
+		return rv
 	}
-	for _, value := range options.Elevated {
-		elevated[reflect.TypeOf(value)] = struct{}{}
-	}
+	me.mut.RUnlock() // If we make it here it is not known; release the lock so we can acquire Write lock.
 	//
 	var scan func(v *Value, indeces []int, prefix string, indent int)
 	scan = func(v *Value, indeces []int, prefix string, indent int) {
 		for k, field := range v.Fields() {
-			if _, found := ignored[field.Value.pt]; found {
+			if _, found := me.ignored[field.Value.pt]; found {
 				continue
 			}
 			//
 			name := ""
-			if _, found := elevated[field.Value.pt]; !found {
-				for _, tagName := range append(options.Tags, "") {
+			if _, found := me.elevated[field.Value.pt]; !found {
+				for _, tagName := range append(me.Tags, "") {
 					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
 						name = tagValue
 						break
 					} else if tagName == "" {
 						name = field.Field.Name
-						if options.Transform != nil {
-							name = options.Transform(name)
+						if me.Transform != nil {
+							name = me.Transform(name)
 						}
 						break
 					}
 				}
 			}
 			if prefix != "" && name != "" {
-				name = prefix + options.Join + name
+				name = prefix + me.Join + name
 			} else if prefix != "" {
 				name = prefix
 			}
@@ -91,35 +126,98 @@ func NewStructMapping(v *Value, options *StructMappingOptions) *StructMapping {
 			if field.Value.IsStruct {
 				scan(field.Value, nameIndeces, name, indent+1)
 			} else if field.Value.IsScalar {
-				rv.mapping[name] = nameIndeces
+				rv[name] = nameIndeces
 			}
 		}
 	}
 	scan(v, []int{}, "", 0)
+	//
+	// Our scan is complete so now we should assign the result to our known types.
+	me.mut.Lock()
+	defer me.mut.Unlock()
+	me.known[v.pt] = rv
+	//
 	return rv
 }
 
+// TODO RM
+// func NewStructMapping(v *Value, options *StructMappingOptions) *StructMapping {
+// 	if options == nil {
+// 		options = DefaultStructMappingOptions
+// 	}
+// 	rv := &StructMapping{
+// 		mapping: map[string][]int{},
+// 	}
+// 	//
+// 	ignored := map[reflect.Type]struct{}{}
+// 	elevated := map[reflect.Type]struct{}{}
+// 	for _, value := range options.Ignored {
+// 		ignored[reflect.TypeOf(value)] = struct{}{}
+// 	}
+// 	for _, value := range options.Elevated {
+// 		elevated[reflect.TypeOf(value)] = struct{}{}
+// 	}
+// 	//
+// 	var scan func(v *Value, indeces []int, prefix string, indent int)
+// 	scan = func(v *Value, indeces []int, prefix string, indent int) {
+// 		for k, field := range v.Fields() {
+// 			if _, found := ignored[field.Value.pt]; found {
+// 				continue
+// 			}
+// 			//
+// 			name := ""
+// 			if _, found := elevated[field.Value.pt]; !found {
+// 				for _, tagName := range append(options.Tags, "") {
+// 					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
+// 						name = tagValue
+// 						break
+// 					} else if tagName == "" {
+// 						name = field.Field.Name
+// 						if options.Transform != nil {
+// 							name = options.Transform(name)
+// 						}
+// 						break
+// 					}
+// 				}
+// 			}
+// 			if prefix != "" && name != "" {
+// 				name = prefix + options.Join + name
+// 			} else if prefix != "" {
+// 				name = prefix
+// 			}
+// 			nameIndeces := append(indeces, k)
+// 			if field.Value.IsStruct {
+// 				scan(field.Value, nameIndeces, name, indent+1)
+// 			} else if field.Value.IsScalar {
+// 				rv.mapping[name] = nameIndeces
+// 			}
+// 		}
+// 	}
+// 	scan(v, []int{}, "", 0)
+// 	return rv
+// }
+
 // Get returns the indeces associated with key in the mapping.  If no such key
 // is found a nil slice is returned.
-func (me *StructMapping) Get(key string) []int {
+func (me StructMapping) Get(key string) []int {
 	v, _ := me.Lookup(key)
 	return v
 }
 
 // Lookup returns the value associated with key in the mapping.  If no such key is
 // found a nil slice is returned and ok is false; otherwise ok is true.
-func (me *StructMapping) Lookup(key string) (indeces []int, ok bool) {
+func (me StructMapping) Lookup(key string) (indeces []int, ok bool) {
 	if me == nil {
 		return nil, false
 	}
-	indeces, ok = me.mapping[key]
+	indeces, ok = me[key]
 	return indeces, ok
 }
 
 // String returns the StructMapping as a string value.
-func (me *StructMapping) String() string {
+func (me StructMapping) String() string {
 	parts := []string{}
-	for str, indeces := range me.mapping {
+	for str, indeces := range me {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
 	}
 	sort.Strings(parts)
