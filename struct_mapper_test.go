@@ -82,17 +82,37 @@ func TestMapper(t *testing.T) {
 
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	{
+	{ // Tests case where receiver is nil when calling Mapping.Lookup
 		var mapping set.Mapping
 		_, ok := mapping.Lookup("Hi")
 		chk.Equal(false, ok)
 	}
-	{
+	{ // Tests case where receiver is nil when calling Mapper.Map
 		var mapper *set.Mapper
 		mapping, err := mapper.Map(struct{}{})
 		chk.Error(err)
 		chk.Nil(mapping)
 	}
+	{ // Tests case when type T is already scanned and uses Mapper.known
+		type T struct {
+			A string
+		}
+		mapping, err := set.DefaultMapper.Map(T{})
+		chk.NoError(err)
+		chk.NotNil(mapping)
+		mapping, err = set.DefaultMapper.Map(T{})
+		chk.NoError(err)
+		chk.NotNil(mapping)
+	}
+	{ // Tests case when type T is already wrapped in *set.Value when calling Mapper.Map
+		type T struct {
+			A string
+		}
+		mapping, err := set.DefaultMapper.Map(set.V(T{}))
+		chk.NoError(err)
+		chk.NotNil(mapping)
+	}
+
 }
 
 func ExampleMapper() {
