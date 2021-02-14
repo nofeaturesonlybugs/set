@@ -80,6 +80,96 @@ func TestMapper(t *testing.T) {
 	}
 }
 
+func TestMapper_Bind(t *testing.T) {
+	chk := assert.New(t)
+	//
+	{
+		type CommonDb struct {
+			Pk          int    `db:"pk" json:"id"`
+			CreatedTime string `db:"created_tmz" json:"created_time"`
+			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
+		}
+		type Person struct {
+			CommonDb
+			Name string
+			Age  int
+		}
+		var data Person
+		mapper := &set.Mapper{
+			Elevated: set.NewTypeList(CommonDb{}),
+		}
+		bound, err := mapper.Bind(&data)
+		chk.NoError(err)
+		chk.NotNil(bound)
+		//
+		field, err := bound.Field("Pk")
+		chk.NoError(err)
+		chk.NotNil(field)
+		err = field.To(10)
+		chk.NoError(err)
+		chk.Equal(10, data.Pk)
+		//
+		err = bound.Set("Pk", "20")
+		chk.NoError(err)
+		chk.Equal(20, data.Pk)
+		//
+		err = bound.Set("CreatedTime", "created")
+		chk.NoError(err)
+		chk.Equal("created", data.CreatedTime)
+		//
+		err = bound.Set("UpdatedTime", "updated")
+		chk.NoError(err)
+		chk.Equal("updated", data.UpdatedTime)
+		//
+		field, err = bound.Field("NotFound")
+		chk.Error(err)
+		chk.Nil(field)
+	}
+	//
+	{ // Test case where CommonDb is embedded but pointer and data is pointer and we pass address of data
+		type CommonDb struct {
+			Pk          int    `db:"pk" json:"id"`
+			CreatedTime string `db:"created_tmz" json:"created_time"`
+			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
+		}
+		type Person struct {
+			*CommonDb
+			Name string
+			Age  int
+		}
+		var data *Person
+		mapper := &set.Mapper{
+			Elevated: set.NewTypeList(CommonDb{}),
+		}
+		bound, err := mapper.Bind(&data)
+		chk.NoError(err)
+		chk.NotNil(bound)
+		//
+		field, err := bound.Field("Pk")
+		chk.NoError(err)
+		chk.NotNil(field)
+		err = field.To(10)
+		chk.NoError(err)
+		chk.Equal(10, data.Pk)
+		//
+		err = bound.Set("Pk", "20")
+		chk.NoError(err)
+		chk.Equal(20, data.Pk)
+		//
+		err = bound.Set("CreatedTime", "created")
+		chk.NoError(err)
+		chk.Equal("created", data.CreatedTime)
+		//
+		err = bound.Set("UpdatedTime", "updated")
+		chk.NoError(err)
+		chk.Equal("updated", data.UpdatedTime)
+		//
+		field, err = bound.Field("NotFound")
+		chk.Error(err)
+		chk.Nil(field)
+	}
+}
+
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	{ // Tests case where receiver is nil when calling Mapping.Lookup
@@ -87,11 +177,14 @@ func TestMapperCodeCoverage(t *testing.T) {
 		_, ok := mapping.Lookup("Hi")
 		chk.Equal(false, ok)
 	}
-	{ // Tests case where receiver is nil when calling Mapper.Map
+	{ // Tests case where receiver is nil when calling Mapper.Map or Mapper.Bind
 		var mapper *set.Mapper
 		mapping, err := mapper.Map(struct{}{})
 		chk.Error(err)
 		chk.Nil(mapping)
+		bound, err := mapper.Bind(struct{}{})
+		chk.Error(err)
+		chk.Nil(bound)
 	}
 	{ // Tests case when type T is already scanned and uses Mapper.known
 		type T struct {
@@ -112,7 +205,36 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.NoError(err)
 		chk.NotNil(mapping)
 	}
-
+	{ // Tests Mapper.Copy
+		type T struct {
+			A string
+			B string
+		}
+		m1, err := set.DefaultMapper.Map(T{})
+		chk.NoError(err)
+		chk.NotNil(m1)
+		m2 := m1.Copy()
+		chk.NotNil(m2)
+		chk.Equal(len(m1), len(m2))
+		m2["A"] = nil
+		m2["B"] = nil
+		chk.NotEqual(len(m1["A"]), len(m2["A"]))
+		chk.NotEqual(len(m1["B"]), len(m2["B"]))
+	}
+	{ // Tests Mapping.Copy when Mapping is nil
+		var m1 set.Mapping
+		m2 := m1.Copy()
+		chk.Nil(m1)
+		chk.Nil(m2)
+	}
+	{ // Tests BoundMapper when value V is not a struct.
+		var b bool
+		bound, err := set.DefaultMapper.Bind(&b)
+		chk.NoError(err)
+		chk.NotNil(bound)
+		err = bound.Set("Huh", false)
+		chk.Error(err)
+	}
 }
 
 func ExampleMapper() {

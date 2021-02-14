@@ -46,11 +46,43 @@ type Mapper struct {
 	known map[reflect.Type]Mapping // Types that are known -- i.e. we've already created the mapping.
 }
 
+// BoundMapper binds a Mapping to a specific variable instance V.
+type BoundMapper interface {
+	// Field returns the *Value for field.
+	Field(field string) (*Value, error)
+	// Set effectively sets V[field] = value.
+	Set(field string, value interface{}) error
+}
+
 var DefaultMapper = &Mapper{
 	Join: "_",
 }
 
-// Map adds T to the StructMapper's list of known and recognized types.
+// Bind creates a Mapping bound to a specific instance I of a variable.
+func (me *Mapper) Bind(I interface{}) (BoundMapper, error) {
+	v := V(I)
+	mapping, err := me.Map(v) // It's this call to Map() that performs the nil receiver check.
+	if err != nil {
+		return nil, errors.Go(err)
+	}
+	rv := &bound_mapper_t{
+		value:   v,
+		mapping: mapping,
+	}
+	return rv, nil
+}
+
+// Map adds T to the Mapper's list of known and recognized types.
+//
+// Map is written to be goroutine safe in that multiple goroutines can call it.  If multiple goroutines call
+// Map simultaneously it is not guaranteed that each goroutine receives the same Mapping instance;
+// however it is guaranteed that each instance will behave identically.
+//
+// If you depend on Map returning the same instance of Mapping for a type T every time it is called then
+// you should call it once for each possible type T synchronously before using the Mapper in your goroutines.
+//
+// Mappings that are returned should not be written to or altered in any way.  If this is your use-case then
+// create a copy of the Mapping with Mapping.Copy.
 func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
@@ -122,6 +154,18 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	return rv, nil
 }
 
+// Copy creates a copy of the Mapping.
+func (me Mapping) Copy() Mapping {
+	if me == nil {
+		return nil
+	}
+	rv := make(Mapping)
+	for k, v := range me {
+		rv[k] = append([]int{}, v...)
+	}
+	return rv
+}
+
 // Get returns the indeces associated with key in the mapping.  If no such key
 // is found a nil slice is returned.
 func (me Mapping) Get(key string) []int {
@@ -139,7 +183,7 @@ func (me Mapping) Lookup(key string) (indeces []int, ok bool) {
 	return indeces, ok
 }
 
-// String returns the StructMapping as a string value.
+// String returns the Mapping as a string value.
 func (me Mapping) String() string {
 	parts := []string{}
 	for str, indeces := range me {
@@ -147,4 +191,26 @@ func (me Mapping) String() string {
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "\n")
+}
+
+// bound_mapper_t is the implementation for BoundMapper.
+type bound_mapper_t struct {
+	value   *Value
+	mapping Mapping
+}
+
+// Field returns the *Value for field.
+func (me *bound_mapper_t) Field(field string) (*Value, error) {
+	// nil check is not necessary as bound_mapper_t is only created within this package.
+	return me.value.FieldByIndex(me.mapping.Get(field))
+}
+
+// Set effectively sets V[field] = value.
+func (me *bound_mapper_t) Set(field string, value interface{}) error {
+	// nil check is not necessary as bound_mapper_t is only created within this package.
+	v, err := me.value.FieldByIndex(me.mapping.Get(field))
+	if err != nil {
+		return errors.Go(err)
+	}
+	return v.To(value)
 }
