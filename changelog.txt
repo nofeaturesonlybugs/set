@@ -1,4 +1,4 @@
-/branch-extend
+/branch-mapper
 
 /develop
 
