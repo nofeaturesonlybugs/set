@@ -48,6 +48,9 @@ type Mapper struct {
 
 // BoundMapper binds a Mapping to a specific variable instance V.
 type BoundMapper interface {
+	// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
+	// calls to Rebind()
+	Err() error
 	// Field returns the *Value for field.
 	Field(field string) (*Value, error)
 	// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
@@ -200,6 +203,16 @@ func (me Mapping) String() string {
 type bound_mapper_t struct {
 	value   *Value
 	mapping Mapping
+	err     error
+}
+
+// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
+// calls to Rebind()
+func (me *bound_mapper_t) Err() error {
+	if me == nil {
+		return errors.NilReceiver()
+	}
+	return me.err
 }
 
 // Field returns the *Value for field.
@@ -216,6 +229,7 @@ func (me *bound_mapper_t) Rebind(I interface{}) error {
 	if v.pt != me.value.pt {
 		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.pv.Interface(), v.pv.Interface())
 	}
+	me.err = nil
 	me.value = v
 	return nil
 }
@@ -225,7 +239,14 @@ func (me *bound_mapper_t) Set(field string, value interface{}) error {
 	// nil check is not necessary as bound_mapper_t is only created within this package.
 	v, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
+		if me.err == nil {
+			me.err = errors.Go(err)
+		}
 		return errors.Go(err)
 	}
-	return v.To(value)
+	err = v.To(value)
+	if err != nil && me.err == nil {
+		me.err = errors.Errorf("While setting [%v]: %v", field, err.Error())
+	}
+	return err
 }

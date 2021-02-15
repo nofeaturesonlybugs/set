@@ -1845,72 +1845,31 @@ func BenchmarkMapperBoundMapping(b *testing.B) {
 			b.Fatalf("Unable to Rebind: %v", err.Error())
 		}
 		//
-		err = bound.Set("Id", row.Id)
-		if err != nil {
-			b.Fatalf("Set Id: %v", err.Error())
-		}
-		err = bound.Set("CreatedTime", row.CreatedTime)
-		if err != nil {
-			b.Fatalf("Set CreatedTime: %v", err.Error())
-		}
-		err = bound.Set("ModifiedTime", row.ModifiedTime)
-		if err != nil {
-			b.Fatalf("Set ModifiedTime: %v", err.Error())
-		}
-		err = bound.Set("Price", row.Price)
-		if err != nil {
-			b.Fatalf("Set Price: %v", err.Error())
-		}
-		err = bound.Set("Quantity", row.Quantity)
-		if err != nil {
-			b.Fatalf("Set Quantity: %v", err.Error())
-		}
-		err = bound.Set("Total", row.Total)
-		if err != nil {
-			b.Fatalf("Set Total: %v", err.Error())
-		}
+		bound.Set("Id", row.Id)
+		bound.Set("CreatedTime", row.CreatedTime)
+		bound.Set("ModifiedTime", row.ModifiedTime)
+		bound.Set("Price", row.Price)
+		bound.Set("Quantity", row.Quantity)
+		bound.Set("Total", row.Total)
 		//
-		err = bound.Set("Customer_Id", row.CustomerId)
-		if err != nil {
-			b.Fatalf("Set Customer_Id: %v", err.Error())
-		}
-		err = bound.Set("Customer_First", row.CustomerFirst)
-		if err != nil {
-			b.Fatalf("Set Customer_First: %v", err.Error())
-		}
-		err = bound.Set("Customer_Last", row.CustomerLast)
-		if err != nil {
-			b.Fatalf("Set Customer_Last: %v", err.Error())
-		}
+		bound.Set("Customer_Id", row.CustomerId)
+		bound.Set("Customer_First", row.CustomerFirst)
+		bound.Set("Customer_Last", row.CustomerLast)
 		//
-		err = bound.Set("Vendor_Id", row.VendorId)
-		if err != nil {
-			b.Fatalf("Set Vendor_Id: %v", err.Error())
-		}
-		err = bound.Set("Vendor_Name", row.VendorName)
-		if err != nil {
-			b.Fatalf("Set Vendor_Name: %v", err.Error())
-		}
-		err = bound.Set("Vendor_Description", row.VendorDescription)
-		if err != nil {
-			b.Fatalf("Set Vendor_Description: %v", err.Error())
-		}
-		err = bound.Set("Vendor_Contact_Id", row.VendorContactId)
-		if err != nil {
-			b.Fatalf("Set Vendor_Contact_Id: %v", err.Error())
-		}
-		err = bound.Set("Vendor_Contact_First", row.VendorContactFirst)
-		if err != nil {
-			b.Fatalf("Set Vendor_Contact_First: %v", err.Error())
-		}
-		err = bound.Set("Vendor_Contact_Last", row.VendorContactLast)
-		if err != nil {
-			b.Fatalf("Set Vendor_Contact_Last: %v", err.Error())
+		bound.Set("Vendor_Id", row.VendorId)
+		bound.Set("Vendor_Name", row.VendorName)
+		bound.Set("Vendor_Description", row.VendorDescription)
+		bound.Set("Vendor_Contact_Id", row.VendorContactId)
+		bound.Set("Vendor_Contact_First", row.VendorContactFirst)
+		bound.Set("Vendor_Contact_Last", row.VendorContactLast)
+		//
+		if err = bound.Err(); err != nil {
+			b.Fatalf("Unable to set: %v", err.Error())
 		}
 	}
 }
 
-func BenchmarkValue(b *testing.B) {
+func BenchmarkValue(b *testing.B) { // TODO MOVE TO DIFFERENT FILE
 	type Common struct {
 		Id int
 	}
@@ -1944,7 +1903,7 @@ func BenchmarkValue(b *testing.B) {
 	}
 	//
 	for k := 0; k < b.N; k++ {
-		dest := &T{}
+		dest := new(T)
 		set.V(&dest)
 	}
 }
