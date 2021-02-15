@@ -338,3 +338,59 @@ func ExampleMapper() {
 	// [1] name
 	// [2] age
 }
+
+func ExampleMapper_Bind() {
+	type CommonDb struct {
+		Pk          int
+		CreatedTime string
+		UpdatedTime string
+	}
+	type Person struct {
+		CommonDb
+		Name string
+		Age  int
+	}
+	Print := func(p Person) {
+		fmt.Printf("Person: pk=%v created=%v updated=%v name=%v age=%v\n", p.Pk, p.CreatedTime, p.UpdatedTime, p.Name, p.Age)
+	}
+	data := []Person{{}, {}}
+	Print(data[0])
+	Print(data[1])
+	//
+	mapper := &set.Mapper{
+		Elevated: set.NewTypeList(CommonDb{}),
+	}
+	bound, err := mapper.Bind(&data[0])
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	bound.Set("Pk", 10)
+	bound.Set("CreatedTime", "-5h")
+	bound.Set("UpdatedTime", "-2h")
+	bound.Set("Name", "Bob")
+	bound.Set("Age", 30)
+	if err = bound.Err(); err != nil {
+		fmt.Println(err.Error())
+	}
+	//
+	if err = bound.Rebind(&data[1]); err != nil {
+		fmt.Println(err.Error())
+	}
+	bound.Set("Pk", 20)
+	bound.Set("CreatedTime", "-15h")
+	bound.Set("UpdatedTime", "-12h")
+	bound.Set("Name", "Sally")
+	bound.Set("Age", 20)
+	if err = bound.Err(); err != nil {
+		fmt.Println(err.Error())
+	}
+	//
+	Print(data[0])
+	Print(data[1])
+
+	// Output: Person: pk=0 created= updated= name= age=0
+	// Person: pk=0 created= updated= name= age=0
+	// Person: pk=10 created=-5h updated=-2h name=Bob age=30
+	// Person: pk=20 created=-15h updated=-12h name=Sally age=20
+
+}
