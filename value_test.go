@@ -1331,6 +1331,14 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	field, err = value.FieldByIndex([]int{})
 	chk.Error(err)
 	chk.Nil(field)
+	//
+	{ // Test scalar, aka something not indexable.
+		var b bool
+		value = set.V(&b)
+		field, err := value.FieldByIndex([]int{1, 2})
+		chk.Error(err)
+		chk.Nil(field)
+	}
 }
 
 func TestValue_fillCodeCoverageErrors(t *testing.T) {

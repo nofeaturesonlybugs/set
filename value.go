@@ -179,25 +179,38 @@ func (me *Value) Fields() []Field {
 // the built-in causes panics while this one will return errors and this method will instantiate nil struct
 // members as it traverses.
 func (me *Value) FieldByIndex(index []int) (*Value, error) {
+	size := len(index)
 	if me == nil {
 		return nil, errors.NilReceiver()
-	} else if !me.IsStruct {
-		return nil, errors.Errorf("Value.FieldByIndex() requires internal type to be struct but type is %v", me.pt)
 	} else if !me.canSet {
 		return nil, errors.Errorf(error_V_NotAssignable)
-	} else if len(index) == 0 {
+	} else if size == 0 {
 		return nil, errors.Errorf("Zero length index provided to FieldByIndex()")
 	}
-	k, remaining := index[0], index[1:]
-	if k > me.pv.NumField() {
-		return nil, errors.Errorf("Index out of bounds; field is len %v and index is %v", me.pv.NumField(), k)
+	v := me.pv
+	for k := 0; k < size; k++ {
+		n := index[k] // n is the index (or field num) to consider
+		if v.Kind() != reflect.Struct {
+			return nil, errors.Errorf("FieldByIndex requires type to be a struct; type is %v", v.Type())
+		} else if n > v.NumField() {
+			return nil, errors.Errorf("Index out of bounds; field is len %v and index is %v", v.NumField(), n)
+		}
+		v = v.Field(n)
+		t, k := v.Type(), v.Kind()
+		// Instantiate nil pointer chains.
+		if k == reflect.Ptr {
+			for k == reflect.Ptr {
+				if v.IsNil() && v.CanSet() {
+					ptr := reflect.New(t.Elem())
+					v.Set(ptr)
+					v = ptr
+				}
+				v = v.Elem()
+				t, k = v.Type(), v.Kind()
+			}
+		}
 	}
-	field := V(me.pv.Field(k))
-	if len(remaining) > 0 {
-		return field.FieldByIndex(remaining)
-	} else {
-		return field, nil
-	}
+	return V(v), nil
 }
 
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
