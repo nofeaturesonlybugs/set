@@ -1,10 +1,13 @@
 package set
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/nofeaturesonlybugs/errors"
+)
+
+const (
+	error_V_NotAssignable = "Original type passed to V() not assignable; pass an address."
 )
 
 // V returns a new Value.
@@ -84,7 +87,6 @@ func V(arg interface{}) *Value {
 	//
 	if rv.pv.CanSet() == false {
 		rv.canSet = false
-		rv.canSetError = fmt.Sprintf("Type [%T] is not assignable; pass an address to V()", arg)
 	} else {
 		rv.canSet = true
 	}
@@ -125,8 +127,7 @@ type Value struct {
 	pk reflect.Kind  // Pointed-to-reflect.Kind
 	//
 	// We pre-check and store if pv is settable and an appropriate error message.
-	canSet      bool
-	canSetError string
+	canSet bool
 }
 
 // Append appends the item(s) to the end of the Value assuming it is some type of slice and every
@@ -183,7 +184,7 @@ func (me *Value) FieldByIndex(index []int) (*Value, error) {
 	} else if !me.IsStruct {
 		return nil, errors.Errorf("Value.FieldByIndex() requires internal type to be struct but type is %v", me.pt)
 	} else if !me.canSet {
-		return nil, errors.Errorf(me.canSetError)
+		return nil, errors.Errorf(error_V_NotAssignable)
 	} else if len(index) == 0 {
 		return nil, errors.Errorf("Zero length index provided to FieldByIndex()")
 	}
@@ -309,7 +310,7 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 // Zero sets the Value to the Zero value of the appropriate type.
 func (me *Value) Zero() error {
 	if !me.canSet {
-		return errors.Errorf(me.canSetError)
+		return errors.Errorf(error_V_NotAssignable)
 	}
 	me.pv.Set(reflect.Zero(me.pt))
 	return nil
