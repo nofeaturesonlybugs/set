@@ -1447,3 +1447,21 @@ func TestValue_appendCodeCoverageErrors(t *testing.T) {
 		chk.Error(err)
 	}
 }
+
+func TestValue_newElemCodeCoverage(t *testing.T) {
+	chk := assert.New(t)
+	//
+	{ // Tests NewElem when *Value is nil
+		var v *set.Value
+		elem, err := v.NewElem()
+		chk.Error(err)
+		chk.Nil(elem)
+	}
+	{ // Tests NewElem when *Value is not nil but not a map
+		var b bool
+		v := set.V(&b)
+		elem, err := v.NewElem()
+		chk.Error(err)
+		chk.Nil(elem)
+	}
+}

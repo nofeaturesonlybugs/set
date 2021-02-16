@@ -329,6 +329,17 @@ func (me *Value) Zero() error {
 	return nil
 }
 
+// NewElem instantiates and returns a *Value that can be Panics.Append()'ed to this type; only valid
+// if Value.Elem is non-nil.
+func (me *Value) NewElem() (*Value, error) {
+	if me == nil {
+		return nil, errors.NilReceiver()
+	} else if me.Elem == nil {
+		return nil, errors.NilMember("Elem").Type(me.Elem)
+	}
+	return V(reflect.New(me.pt.Elem())), nil
+}
+
 // To attempts to assign the argument into Value; Value is always set to the Zero value for its type before
 // any other assignment ensuring if an assignment fails for any reason that any old data is overwritten.
 //
