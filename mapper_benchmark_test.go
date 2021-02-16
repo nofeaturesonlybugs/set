@@ -1790,6 +1790,56 @@ func BenchmarkMapperBaseline(b *testing.B) {
 	}
 }
 
+func BenchmarkMapperJsonUnmarshal(b *testing.B) {
+	rowsDecoded, size := loadBenchmarkMapperData(b)
+	var rows []string
+	for _, decoded := range rowsDecoded {
+		if encoded, err := json.MarshalIndent(decoded, "", "\t"); err != nil {
+			b.Fatalf("During json.Marshal: %v", err.Error())
+		} else {
+			rows = append(rows, string(encoded))
+		}
+
+	}
+	//
+	type CustomerContact struct {
+		Id    int    `json:"customer_id"`
+		First string `json:"customer_first"`
+		Last  string `json:"customer_last"`
+	}
+	type VendorContact struct {
+		Id    int    `json:"vendor_contact_id"`
+		First string `json:"vendor_contact_first"`
+		Last  string `json:"vendor_contact_last"`
+	}
+	type Vendor struct {
+		Id          int    `json:"vendor_id"`
+		Name        string `json:"vendor_name"`
+		Description string `json:"vendor_description"`
+		VendorContact
+	}
+	type T struct {
+		Id           int    `json:"id"`
+		CreatedTime  string `json:"created_time"`
+		ModifiedTime string `json:"modified_time"`
+		Price        int    `json:"price"`
+		Quantity     int    `json:"quantity"`
+		Total        int    `json:"total"`
+
+		CustomerContact
+		Vendor
+	}
+	//
+	b.ResetTimer()
+	//
+	for k := 0; k < b.N; k++ {
+		row := rows[k%size]
+		dest := new(T)
+		if err := json.Unmarshal([]byte(row), dest); err != nil {
+			b.Fatalf("During json.Unmarshal: %v", err.Error())
+		}
+	}
+}
 func BenchmarkMapperBoundMapping(b *testing.B) {
 	rows, size := loadBenchmarkMapperData(b)
 	//
