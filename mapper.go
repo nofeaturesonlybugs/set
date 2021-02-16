@@ -226,7 +226,7 @@ type bound_mapper_t struct {
 // to the field in the bound variable.
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
-// query results. // TODO An example would be great.
+// query results.
 func (me *bound_mapper_t) Assignables(fields []string) ([]interface{}, error) {
 	// nil check is not necessary as bound_mapper_t is only created within this package.
 	rv := []interface{}{}
