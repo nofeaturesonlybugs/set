@@ -268,7 +268,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.Nil(m1)
 		chk.Nil(m2)
 	}
-	{ // Tests BoundMapper when value V is not a struct.
+	{ // Tests BoundMapping when value V is not a struct.
 		var b bool
 		bound, err := set.DefaultMapper.Bind(&b)
 		chk.NoError(err)
@@ -276,7 +276,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		err = bound.Set("Huh", false)
 		chk.Error(err)
 	}
-	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapper.Rebind when value is already a *set.Value
+	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapping.Rebind when value is already a *set.Value
 		type T struct {
 			A string
 		}
@@ -288,7 +288,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		err = bound.Rebind(vu)
 		chk.NoError(err)
 	}
-	{ // Tests BoundMapper.Set when the underlying set can not be performed.
+	{ // Tests BoundMapping.Set when the underlying set can not be performed.
 		type A struct {
 			I int
 		}
@@ -314,7 +314,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.Equal(true, ok)
 		chk.NotNil(field)
 	}
-	{ // Tests BoundMapper.Assignables
+	{ // Tests BoundMapping.Assignables
 		type A struct {
 			A string
 			B string

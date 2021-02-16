@@ -52,8 +52,8 @@ type Mapper struct {
 	known map[reflect.Type]Mapping // Types that are known -- i.e. we've already created the mapping.
 }
 
-// BoundMapper binds a Mapping to a specific variable instance V.
-type BoundMapper interface {
+// BoundMapping binds a Mapping to a specific variable instance V.
+type BoundMapping interface {
 	// Assignables returns a slice of interfaces by field names where each element is a pointer
 	// to the field in the bound variable.
 	Assignables(fields []string) ([]interface{}, error)
@@ -74,7 +74,7 @@ var DefaultMapper = &Mapper{
 }
 
 // Bind creates a Mapping bound to a specific instance I of a variable.
-func (me *Mapper) Bind(I interface{}) (BoundMapper, error) {
+func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	var v *Value
 	if tv, ok := I.(*Value); ok {
 		v = tv
@@ -85,7 +85,7 @@ func (me *Mapper) Bind(I interface{}) (BoundMapper, error) {
 	if err != nil {
 		return nil, errors.Go(err)
 	}
-	rv := &bound_mapper_t{
+	rv := &bound_mapping_t{
 		value:   v,
 		mapping: mapping,
 	}
@@ -215,8 +215,8 @@ func (me Mapping) String() string {
 	return strings.Join(parts, "\n")
 }
 
-// bound_mapper_t is the implementation for BoundMapper.
-type bound_mapper_t struct {
+// bound_mapping_t is the implementation for BoundMapping.
+type bound_mapping_t struct {
 	value   *Value
 	mapping Mapping
 	err     error
@@ -227,8 +227,8 @@ type bound_mapper_t struct {
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
-func (me *bound_mapper_t) Assignables(fields []string) ([]interface{}, error) {
-	// nil check is not necessary as bound_mapper_t is only created within this package.
+func (me *bound_mapping_t) Assignables(fields []string) ([]interface{}, error) {
+	// nil check is not necessary as bound_mapping_t is only created within this package.
 	rv := []interface{}{}
 	for _, name := range fields {
 		if field, err := me.Field(name); err != nil {
@@ -242,21 +242,21 @@ func (me *bound_mapper_t) Assignables(fields []string) ([]interface{}, error) {
 
 // Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 // calls to Rebind()
-func (me *bound_mapper_t) Err() error {
-	// nil check is not necessary as bound_mapper_t is only created within this package.
+func (me *bound_mapping_t) Err() error {
+	// nil check is not necessary as bound_mapping_t is only created within this package.
 	return me.err
 }
 
 // Field returns the *Value for field.
-func (me *bound_mapper_t) Field(field string) (*Value, error) {
-	// nil check is not necessary as bound_mapper_t is only created within this package.
+func (me *bound_mapping_t) Field(field string) (*Value, error) {
+	// nil check is not necessary as bound_mapping_t is only created within this package.
 	return me.value.FieldByIndex(me.mapping.Get(field))
 }
 
 // Rebind will replace the currently bound value with the new variable I.  If the underlying types are
 // not the same then an error is returned.
-func (me *bound_mapper_t) Rebind(I interface{}) error {
-	// nil check is not necessary as bound_mapper_t is only created within this package.
+func (me *bound_mapping_t) Rebind(I interface{}) error {
+	// nil check is not necessary as bound_mapping_t is only created within this package.
 	var v *Value
 	if tv, ok := I.(*Value); ok {
 		v = tv
@@ -272,8 +272,8 @@ func (me *bound_mapper_t) Rebind(I interface{}) error {
 }
 
 // Set effectively sets V[field] = value.
-func (me *bound_mapper_t) Set(field string, value interface{}) error {
-	// nil check is not necessary as bound_mapper_t is only created within this package.
+func (me *bound_mapping_t) Set(field string, value interface{}) error {
+	// nil check is not necessary as bound_mapping_t is only created within this package.
 	v, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
 		if me.err == nil {
