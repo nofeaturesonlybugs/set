@@ -2,6 +2,7 @@ package set
 
 import (
 	"reflect"
+	"sync"
 
 	"github.com/nofeaturesonlybugs/errors"
 )
@@ -9,6 +10,71 @@ import (
 const (
 	error_V_NotAssignable = "Original type passed to V() not assignable; pass an address."
 )
+
+// type_t is a small hidden type that we can use to cache information about types T that are created
+// with V().
+type type_t struct {
+	t, pt reflect.Type
+	k, pk reflect.Kind
+}
+
+// known_t contains members to enhance the speed of this package.
+type known_t struct {
+	known map[reflect.Type]type_t
+	sync.RWMutex
+}
+
+// known is an instance of known_t.
+var known = &known_t{
+	known: map[reflect.Type]type_t{},
+}
+
+// followPointer accepts v, t, and k and if vtk represents a pointer, or chain of pointers, follows
+// to the end of the chain and instantiates nil pointers along the way.
+func (me *known_t) followPointer(v reflect.Value, t reflect.Type, k reflect.Kind) (pv reflect.Value, pt reflect.Type, pk reflect.Kind) {
+	pv, pt, pk = v, t, k
+	for k == reflect.Ptr {
+		if v.IsNil() && v.CanSet() {
+			ptr := reflect.New(t.Elem())
+			v.Set(ptr)
+			v = ptr
+		}
+		v = v.Elem()
+		t, k = v.Type(), v.Kind()
+	}
+	pv, pt, pk = v, t, k
+	return
+}
+
+// get accepts an arg and returns reflect data to use it.
+func (me *known_t) get(arg interface{}) (v reflect.Value, pv reflect.Value, typeInfo type_t, ok bool) {
+	if tv, tok := arg.(reflect.Value); tok {
+		v = tv
+	} else {
+		v = reflect.ValueOf(arg)
+	}
+	if !v.IsValid() {
+		return v, v, type_t{}, false
+	}
+	//
+	t := v.Type()
+	me.RLock()
+	if typeInfo, ok = me.known[t]; ok {
+		me.RUnlock()
+		// TODO Calculate pv, return
+		return
+	}
+	me.RUnlock()
+	//
+	// TODO MAKE STUFF
+	k := v.Kind()
+	typeInfo = type_t{t: t, k: k}
+	pv, typeInfo.pt, typeInfo.pk = me.followPointer(v, t, k)
+	me.Lock()
+	defer me.Unlock()
+	me.known[t] = typeInfo
+	return
+}
 
 // V returns a new Value.
 //
@@ -27,6 +93,8 @@ const (
 //	v := set.V(&bp)
 //	// bp now contains allocated memory.
 func V(arg interface{}) *Value {
+	_, _, _, _ = known.get(arg)
+	//
 	var v reflect.Value
 	var t reflect.Type
 	var k reflect.Kind
