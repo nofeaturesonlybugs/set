@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nofeaturesonlybugs/set"
 	"github.com/nofeaturesonlybugs/set/assert"
@@ -274,6 +275,69 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.NotNil(bound)
 		err = bound.Set("Huh", false)
 		chk.Error(err)
+	}
+	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapper.Rebind when value is already a *set.Value
+		type T struct {
+			A string
+		}
+		var t, u T
+		vt, vu := set.V(&t), set.V(&u)
+		bound, err := set.DefaultMapper.Bind(vt)
+		chk.NoError(err)
+		chk.NotNil(bound)
+		err = bound.Rebind(vu)
+		chk.NoError(err)
+	}
+	{ // Tests BoundMapper.Set when the underlying set can not be performed.
+		type A struct {
+			I int
+		}
+		bound, err := set.DefaultMapper.Bind(&A{})
+		chk.NoError(err)
+		chk.NotNil(bound)
+		err = bound.Set("I", "Hello, World!")
+		chk.Error(err)
+	}
+	{ // Tests Mapper.Map for structs inherently treated as scalars, such as time.Time and *time.Time
+		type T struct {
+			Time  time.Time
+			PTime *time.Time
+		}
+		mapping, err := set.DefaultMapper.Map(&T{})
+		chk.NoError(err)
+		chk.NotNil(mapping)
+		//
+		field, ok := mapping.Lookup("Time")
+		chk.Equal(true, ok)
+		chk.NotNil(field)
+		field, ok = mapping.Lookup("PTime")
+		chk.Equal(true, ok)
+		chk.NotNil(field)
+	}
+	{ // Tests BoundMapper.Assignables
+		type A struct {
+			A string
+			B string
+		}
+		data := []A{{}, {}}
+		for k := 0; k < len(data); k++ {
+			bound, err := set.DefaultMapper.Bind(&data[k])
+			chk.NoError(err)
+			chk.NotNil(bound)
+			assignables, err := bound.Assignables([]string{"B", "A"})
+			chk.NoError(err)
+			chk.NotNil(assignables)
+			chk.Equal(2, len(assignables))
+			chk.Equal(fmt.Sprintf("%p", &data[k].B), fmt.Sprintf("%p", assignables[0]))
+			chk.Equal(fmt.Sprintf("%p", &data[k].A), fmt.Sprintf("%p", assignables[1]))
+			chk.Equal(&data[k].B, assignables[0])
+			chk.Equal(&data[k].A, assignables[1])
+			//
+			assignables, err = bound.Assignables([]string{"b", "b"})
+			chk.Error(err)
+			chk.Nil(assignables)
+			chk.Equal(0, len(assignables))
+		}
 	}
 }
 

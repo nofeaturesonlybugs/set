@@ -6,9 +6,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nofeaturesonlybugs/errors"
 )
+
+var mapper_TreatAsScalar = map[reflect.Type]struct{}{
+	reflect.TypeOf(time.Time{}):  {},
+	reflect.TypeOf(&time.Time{}): {},
+}
 
 // Mapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
 //	Key is a string key representing a common or friendly name for the nested struct member.
@@ -48,6 +54,9 @@ type Mapper struct {
 
 // BoundMapper binds a Mapping to a specific variable instance V.
 type BoundMapper interface {
+	// Assignables returns a slice of interfaces by field names where each element is a pointer
+	// to the field in the bound variable.
+	Assignables(fields []string) ([]interface{}, error)
 	// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 	// calls to Rebind()
 	Err() error
@@ -66,7 +75,12 @@ var DefaultMapper = &Mapper{
 
 // Bind creates a Mapping bound to a specific instance I of a variable.
 func (me *Mapper) Bind(I interface{}) (BoundMapper, error) {
-	v := V(I)
+	var v *Value
+	if tv, ok := I.(*Value); ok {
+		v = tv
+	} else {
+		v = V(I)
+	}
 	mapping, err := me.Map(v) // It's this call to Map() that performs the nil receiver check.
 	if err != nil {
 		return nil, errors.Go(err)
@@ -137,7 +151,9 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 				name = prefix
 			}
 			nameIndeces := append(indeces, k)
-			if field.Value.IsStruct {
+			if _, ok := mapper_TreatAsScalar[field.Value.pt]; ok {
+				rv[name] = nameIndeces
+			} else if field.Value.IsStruct {
 				scan(field.Value, nameIndeces, name, indent+1)
 			} else if field.Value.IsScalar {
 				rv[name] = nameIndeces
@@ -206,12 +222,28 @@ type bound_mapper_t struct {
 	err     error
 }
 
+// Assignables returns a slice of interfaces by field names where each element is a pointer
+// to the field in the bound variable.
+//
+// An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
+// query results. // TODO An example would be great.
+func (me *bound_mapper_t) Assignables(fields []string) ([]interface{}, error) {
+	// nil check is not necessary as bound_mapper_t is only created within this package.
+	rv := []interface{}{}
+	for _, name := range fields {
+		if field, err := me.Field(name); err != nil {
+			return nil, errors.Errorf("%v while accessing field [%v]", err.Error(), name)
+		} else {
+			rv = append(rv, field.pv.Addr().Interface())
+		}
+	}
+	return rv, nil
+}
+
 // Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 // calls to Rebind()
 func (me *bound_mapper_t) Err() error {
-	if me == nil {
-		return errors.NilReceiver()
-	}
+	// nil check is not necessary as bound_mapper_t is only created within this package.
 	return me.err
 }
 
@@ -225,7 +257,12 @@ func (me *bound_mapper_t) Field(field string) (*Value, error) {
 // not the same then an error is returned.
 func (me *bound_mapper_t) Rebind(I interface{}) error {
 	// nil check is not necessary as bound_mapper_t is only created within this package.
-	v := V(I)
+	var v *Value
+	if tv, ok := I.(*Value); ok {
+		v = tv
+	} else {
+		v = V(I)
+	}
 	if v.pt != me.value.pt {
 		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.pv.Interface(), v.pv.Interface())
 	}
