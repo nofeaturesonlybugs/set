@@ -27,6 +27,6 @@ var Panics = CanPanic{}
 //	}
 func (p CanPanic) Append(dest *Value, values ...*Value) {
 	for _, value := range values {
-		dest.pv.Set(reflect.Append(dest.pv, reflect.Indirect(value.v)))
+		dest.WriteValue.Set(reflect.Append(dest.WriteValue, reflect.Indirect(value.TopValue)))
 	}
 }
