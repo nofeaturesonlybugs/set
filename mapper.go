@@ -255,18 +255,8 @@ func (me *bound_mapping_t) Field(field string) (*Value, error) {
 // not the same then an error is returned.
 func (me *bound_mapping_t) Rebind(I interface{}) error {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	var v *Value
-	if tv, ok := I.(*Value); ok {
-		v = tv
-	} else {
-		v = V(I)
-	}
-	if v.Type != me.value.Type {
-		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.WriteValue.Interface(), v.WriteValue.Interface())
-	}
 	me.err = nil
-	me.value = v
-	return nil
+	return me.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.

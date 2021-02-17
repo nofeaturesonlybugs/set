@@ -32,9 +32,10 @@ func V(arg interface{}) *Value {
 	rv.original = arg
 	//
 	var v reflect.Value
-	if argReflectValue, ok := arg.(reflect.Value); ok {
-		v = argReflectValue
-	} else {
+	switch tt := arg.(type) {
+	case reflect.Value:
+		v = tt
+	default:
 		v = reflect.ValueOf(arg)
 	}
 	if v.IsValid() {
@@ -286,6 +287,55 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 		return value.FillByTag(key, getter)
 	}
 	return me.fill(getter, fields, keyFunc, fillFunc)
+}
+
+// Rebind will swap the underlying original value used to create *Value with the incoming
+// value if:
+//	Type(Original) == Type(Incoming).
+//
+// If Rebind succeeds the following public members will have been replaced appropriately:
+//	CanWrite
+//	TopValue
+//	WriteValue
+//
+// Reach for this function to translate:
+//	var slice []T
+//	// populate slice
+//	for _, item := range slice {
+//		v := set.V( item )
+//		// manipulate v in order to affect item
+//	}
+// to:
+//	var slice []T
+//	v := set.V( T{} ) // Create v and gather type information
+//	// populate slice
+//	for _, item := range slice {
+//		if err := v.Rebind( item ); err != nil {
+//			// Handle error
+//		}
+//		// manipulate v in order to affect item
+//	}
+//
+// If an error is returned the original value is still in place.
+func (me *Value) Rebind(arg interface{}) error {
+	if me == nil {
+		return errors.NilReceiver()
+	}
+	var v reflect.Value
+	switch tt := arg.(type) {
+	case reflect.Value:
+		v = tt
+	case *Value:
+		v = tt.TopValue
+	default:
+		v = reflect.ValueOf(arg)
+	}
+	if me.TopValue.Type() != v.Type() {
+		return errors.Errorf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg)
+	}
+	me.original, me.TopValue = arg, v
+	me.WriteValue, me.CanWrite = Writable(v)
+	return nil
 }
 
 // Zero sets the Value to the Zero value of the appropriate type.
