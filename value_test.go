@@ -7,22 +7,30 @@ import (
 	"github.com/nofeaturesonlybugs/set/assert"
 )
 
-// TODO RM
-// func TestValue_Broken(t *testing.T) {
-// 	chk := assert.New(t)
-// 	var err error
-// 	//
-// 	{
-// 		var b []*bool
-// 		chk.Equal(0, len(b))
-// 		err = set.V(&b).Append(true, false)
-// 		chk.NoError(err)
-// 		chk.Equal(2, len(b))
-// 		chk.Equal(true, *b[0])
-// 		chk.Equal(false, *b[1])
-// 	}
-// }
-
+func TestValueOnNil(t *testing.T) {
+	chk := assert.New(t)
+	//
+	{
+		value := set.V(nil)
+		chk.Equal(false, value.WriteValue.IsValid())
+	}
+	{
+		var err error
+		value := set.V(err)
+		chk.Equal(false, value.WriteValue.IsValid())
+		value = set.V(&err)
+		chk.Equal(true, value.WriteValue.IsValid())
+	}
+	{ // Test case that pointer that is eventually nil sets slice to nil
+		var pptr **bool
+		ppptr := &pptr
+		slice := []int{0, 1, 2, 3}
+		value := set.V(&slice)
+		err := value.To(ppptr)
+		chk.NoError(err)
+		chk.Nil(slice)
+	}
+}
 func TestValue_fields(t *testing.T) {
 	chk := assert.New(t)
 	//

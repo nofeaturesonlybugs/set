@@ -3,7 +3,6 @@ package set
 import (
 	"fmt"
 	"reflect"
-	"sync"
 
 	"github.com/nofeaturesonlybugs/errors"
 )
@@ -11,97 +10,6 @@ import (
 const (
 	error_V_NotAssignable = "Original type passed to V() not assignable; pass an address."
 )
-
-// type_t is a small hidden type that we can use to cache information about types T that are created
-// with V().
-type type_t struct {
-	t, pt reflect.Type
-	k, pk reflect.Kind
-}
-
-// known_t contains members to enhance the speed of this package.
-type known_t struct {
-	known map[reflect.Type]type_t
-	sync.RWMutex
-}
-
-// known is an instance of known_t.
-var known = &known_t{
-	known: map[reflect.Type]type_t{},
-}
-
-// derefWithAlloc dereferences <v,t,k> if it is a pointer to the final value in the chain; if any pointer in the chain is nil
-// and v is settable then intermediate pointers will be allocated and assigned.
-func (me *known_t) derefWithAlloc(v reflect.Value, t reflect.Type, k reflect.Kind) (pv reflect.Value, pt reflect.Type, pk reflect.Kind) {
-	pv, pt, pk = v, t, k
-	for pk == reflect.Ptr {
-		if pv.IsNil() && pv.CanSet() {
-			ptr := reflect.New(pt.Elem())
-			pv.Set(ptr)
-		}
-		pt, pk, pv = pt.Elem(), pt.Elem().Kind(), pv.Elem()
-	}
-	return
-
-	//
-	//
-	//
-
-	// fmt.Printf("followPointer %v %v\n", t, v.IsZero()) // TODO RM
-	// pv, pt, pk = v, t, k
-	// if k == reflect.Ptr && !v.IsZero() {
-	// 	// if !pv.IsZero() {
-	// 	for k == reflect.Ptr {
-	// 		if v.IsNil() && v.CanSet() {
-	// 			ptr := reflect.New(t.Elem())
-	// 			v.Set(ptr)
-	// 			v = ptr
-	// 		}
-	// 		v = v.Elem()
-	// 		fmt.Printf("\t %v\n", v.IsZero()) // TODO RM
-	// 		t, k = v.Type(), v.Kind()
-	// 		// pk = pv.Kind()
-	// 		// if pk == reflect.Ptr && !pv.IsZero() {
-	// 		// 	pt = pv.Type()
-	// 		// }
-	// 	}
-	// 	// }
-	// 	pv, pt, pk = v, t, k
-	// }
-	// return
-}
-
-// get accepts an arg and returns reflect data to use it.
-func (me *known_t) get(arg interface{}) (v reflect.Value, pv reflect.Value, typeInfo type_t, ok bool) {
-	if tv, tok := arg.(reflect.Value); tok {
-		v = tv
-	} else {
-		v = reflect.ValueOf(arg)
-	}
-	if !v.IsValid() {
-		return v, v, type_t{}, false
-	}
-	//
-	t := v.Type()
-	me.RLock()
-	if typeInfo, ok = me.known[t]; ok {
-		me.RUnlock()
-		pv, _, _ = me.derefWithAlloc(v, t, typeInfo.k)
-		return
-	}
-	me.RUnlock()
-	//
-	// TODO MAKE STUFF
-	k := v.Kind()
-	typeInfo = type_t{t: t, k: k}
-	pv, typeInfo.pt, typeInfo.pk = me.derefWithAlloc(v, t, k)
-	//
-	me.Lock()
-	defer me.Unlock()
-	me.known[t] = typeInfo
-	ok = true
-	return
-}
 
 // V returns a new Value.
 //
@@ -121,8 +29,6 @@ func (me *known_t) get(arg interface{}) (v reflect.Value, pv reflect.Value, type
 //	// bp now contains allocated memory.
 func V(arg interface{}) *Value {
 	var v reflect.Value
-	var t reflect.Type
-	var k reflect.Kind
 	//
 	rv := &Value{}
 	rv.original = arg
@@ -134,62 +40,19 @@ func V(arg interface{}) *Value {
 	rv.methodZero = rv.zeroUnsupported
 	//
 	if argReflectValue, ok := arg.(reflect.Value); ok {
-		v, t, k = argReflectValue, argReflectValue.Type(), argReflectValue.Kind()
+		v = argReflectValue
 	} else {
 		v = reflect.ValueOf(arg)
-		// func() {
-		// defer func() {
-		// 	recover()
-		// }()
-		// This can panic if arg == nil so wrap cleanly.
-		t, k = v.Type(), v.Kind()
-		// }()
 	}
-	// rv.TypeInfo = TypeCache.StatType(rv.t) // TODO RM
 	rv.WriteValue, rv.TypeInfo, rv.CanWrite = Writable(v)
 	rv.TopValue = v
-	rv.v, rv.t, rv.k = v, t, k
-	rv.pv, rv.pt, rv.pk = v, t, k
-
-	// If the incoming type is a pointer then we will follow the pointer trail to the end element;
-	// along the way we will instantiate any new pointers necessary.
-	// func() {
-	// 	defer func() {
-	// 		recover()
-	// 	}()
-	// 	if k == reflect.Ptr {
-	// 		for k == reflect.Ptr {
-	// 			if v.IsNil() && v.CanSet() {
-	// 				ptr := reflect.New(t.Elem())
-	// 				v.Set(ptr)
-	// 				v = ptr
-	// 			}
-	// 			v = v.Elem()
-	// 			// Note that if the original arg was a nil-pointer and unsettable that we will panic
-	// 			// here; thus the anonymous function wrapping and defer-recover.
-	// 			t, k = v.Type(), v.Kind()
-	// 		}
-	// 		rv.pv, rv.pt, rv.pk = v, t, k
-	// 	}
-	// }()
 
 	if rv.IsMap || rv.IsSlice {
-		// ptr := reflect.New(rv.pt.Elem()) // TODO RESTORE???
-		// rv.Elem = V(ptr) // TODO RESTORE???
 		// fmt.Printf("Adding support for...NewElem()\n") //TODO RM
-		rv.Elem = V(reflect.New(rv.ElemType))
 		rv.ElemTypeInfo = TypeCache.StatType(rv.ElemType)
 		rv.methodNewElem = rv.newElemSupported
 	}
 	//
-	// TODO RM
-	// if rv.pv.CanSet() == false {
-	// 	// rv.canSet = false // TODO RM
-	// } else {
-	// 	// rv.canSet = true // TODO RM
-	// 	// fmt.Printf("Adding support for...Zero()\n") // TODO RM
-	// 	rv.methodZero = rv.zeroSupported
-	// }
 	if rv.CanWrite {
 		rv.methodZero = rv.zeroSupported
 	}
@@ -236,26 +99,10 @@ type Value struct {
 	// value.  Generally you should avoid it but it's also present if you really know what you're doing.
 	WriteValue reflect.Value
 
-	// When IsMap or IsSlice are true then Elem is a *Value of a the zero-type contained in the map or slice.
-	// Otherwise Elem is a nil pointer.
-	Elem *Value
-
 	// When IsMap or IsSlice are true then ElemTypeInfo is a TypeInfo struct describing the element types.
 	ElemTypeInfo TypeInfo
 
 	original interface{}
-	// Basic reflect information for the initial value.
-	v reflect.Value
-	t reflect.Type
-	k reflect.Kind
-	//
-	// If original is a pointer then we want to know about the type pointed to.
-	pv reflect.Value // Pointed-to-reflect.Value
-	pt reflect.Type  // Pointed-to-reflect.Type
-	pk reflect.Kind  // Pointed-to-reflect.Kind
-	//
-	// We pre-check and store if pv is settable and an appropriate error message.
-	// canSet bool // TODO RM
 	//
 	// We switch out method implementations depending on the original type arg.  We can organize this better
 	// but this is a rough first pass for improved benchmarking.
@@ -288,30 +135,20 @@ func (me *Value) appendSupported(items ...interface{}) error {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// fmt.Println("THE PANIC IS THE ERROR") // TODO RM
 				err = errors.Errorf("%v", r)
 			}
 		}()
-		// fmt.Printf("me.Type= %v\n", me.Type) //TODO RM
 		zero := reflect.Zero(me.Type)
-		// zero := reflect.Zero(me.pt) // TODO RM
 		for _, item := range items {
-			// fmt.Printf("me.ElemType= %v\n", me.ElemType) //TODO RM
 			elem := reflect.New(me.ElemType)
-			// elem := reflect.New(me.pt.Elem()) // TODO RM
 			elemAsValue := V(elem)
-			// fmt.Printf("To( %v )\n", item) // TODO RM
 			if err = elemAsValue.To(item); err != nil {
-				// fmt.Println("THIS IS THE ERROR RIGHT HERE") //TODO RM
 				err = errors.Go(err)
 				return
 			}
-			// fmt.Printf("\tTo()\n") //TODO RM
 			zero = reflect.Append(zero, reflect.Indirect(elemAsValue.TopValue))
-			// zero = reflect.Append(zero, reflect.Indirect(elemAsValue.v)) // TODO RM
 		}
 		me.WriteValue.Set(reflect.AppendSlice(me.WriteValue, zero))
-		// me.pv.Set(reflect.AppendSlice(me.pv, zero)) // TODO RM
 	}()
 	return err
 }
@@ -329,7 +166,6 @@ func (me *Value) Fields() []Field {
 func (me *Value) fieldsSupported() []Field {
 	var rv []Field
 	if me != nil && me.IsStruct {
-		// for k, max := 0, me.pt.NumField(); k < max; k++ { // TODO RM
 		for k, max := 0, me.Type.NumField(); k < max; k++ {
 			v, f := me.WriteValue.Field(k), me.Type.Field(k)
 			rv = append(rv, Field{Value: V(v), Field: f})
@@ -351,12 +187,10 @@ func (me *Value) FieldByIndex(index []int) (*Value, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
 	} else if !me.CanWrite {
-		// } else if !me.canSet { // TODO RM
 		return nil, errors.Errorf(error_V_NotAssignable)
 	} else if size == 0 {
 		return nil, errors.Errorf("Zero length index provided to FieldByIndex()")
 	}
-	// v := me.pv // TODO RM
 	v := me.WriteValue
 	for k := 0; k < size; k++ {
 		n := index[k] // n is the index (or field num) to consider
@@ -426,7 +260,6 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 					return errors.Go(err)
 				}
 			} else if field.Value.IsSlice && field.Value.ElemTypeInfo.IsStruct {
-				// } else if field.Value.IsSlice && field.Value.Elem != nil && field.Value.Elem.IsStruct { // TODO RM
 				if err = field.Value.Zero(); err != nil {
 					return errors.Go(err)
 				}
@@ -443,7 +276,6 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 			// What was returned from the Getter is a []Getter; therefore we expect field.Value to
 			// be a []struct or struct that we can sub-fill.
 			if field.Value.IsSlice && field.Value.ElemTypeInfo.IsStruct {
-				// if field.Value.IsSlice && field.Value.Elem != nil && field.Value.Elem.IsStruct { // TODO RM
 				// Zero out the existing slice.
 				if err = field.Value.Zero(); err != nil {
 					return errors.Go(err)
@@ -509,7 +341,6 @@ func (me *Value) Zero() error {
 }
 
 func (me *Value) zeroSupported() error {
-	// me.pv.Set(reflect.Zero(me.pt)) // TODO RM
 	me.WriteValue.Set(reflect.Zero(me.Type))
 	return nil
 }
@@ -528,7 +359,6 @@ func (me *Value) NewElem() (*Value, error) {
 }
 
 func (me *Value) newElemSupported() (*Value, error) {
-	// return V(reflect.New(me.pt.Elem())), nil // TODO RM
 	return V(reflect.New(me.ElemType)), nil
 }
 func (me *Value) newElemUnsupported() (*Value, error) {
@@ -561,55 +391,46 @@ func (me *Value) newElemUnsupported() (*Value, error) {
 func (me *Value) To(arg interface{}) error {
 	var err error
 	//
-	if err = me.Zero(); err != nil {
+	dataTypeInfo := TypeCache.Stat(arg)
+	if me.original == nil {
+		return errors.Errorf(me.errorUnsupported("To"))
+	} else if err = me.Zero(); err != nil {
 		return err
-	} else if arg == nil {
+	} else if arg == nil || dataTypeInfo.Kind == reflect.Invalid {
 		return nil
-	}
-	//
-	// TODO RM
-	// if data.original == nil {
-	// 	return nil
-	// } else if data.v.IsValid() && data.t.AssignableTo(me.pt) && me.pk != reflect.Slice {
-	// 	// N.B: We checked that me.pk is not a slice because this package always makes a copy of a slice!
-	// 	me.pv.Set(data.v)
-	// 	return nil
-	// }
-	data := V(arg)
-	if data.v.IsValid() && data.t.AssignableTo(me.Type) && me.Kind != reflect.Slice {
-		// if data.v.IsValid() && data.t.AssignableTo(me.pt) && me.pk != reflect.Slice { // TODO RM
-		// N.B: We checked that me.pk is not a slice because this package always makes a copy of a slice!
-		// me.pv.Set(data.v) // TODO RM
-		me.WriteValue.Set(data.v)
+	} else if dataTypeInfo.Type.AssignableTo(me.Type) && me.Kind != reflect.Slice {
+		// N.B: We checked that me.Kind is not a slice because this package always makes a copy of a slice!
+		me.WriteValue.Set(reflect.ValueOf(arg))
 		return nil
 	}
 	//
 	// If arg/data represents any type of pointer we want to get to the final value:
-	for ; data.k == reflect.Ptr; data = V(reflect.Indirect(data.v)) {
+	dataValue := reflect.ValueOf(arg)
+	for ; dataValue.Kind() == reflect.Ptr; dataValue = reflect.Indirect(dataValue) {
+		if dataValue.IsNil() { // If arg is a pointer and eventually nil we're done because we're already zero value.
+			return nil
+		}
 	}
 	//
 	if me.IsSlice {
-		if !data.IsSlice {
+		if !dataTypeInfo.IsSlice {
 			arg = []interface{}{arg}
 		}
 		slice := reflect.ValueOf(arg)
 		for k, size := 0, slice.Len(); k < size; k++ {
-			// elem := V(reflect.New(me.Elem.t).Interface())// TODO RM
 			elem := V(reflect.New(me.ElemType).Interface())
 			if err = elem.To(slice.Index(k).Interface()); err != nil {
 				me.Zero()
 				return err
 			}
-			// me.pv.Set(reflect.Append(me.pv, elem.pv))//TODO RM
 			me.WriteValue.Set(reflect.Append(me.WriteValue, elem.WriteValue))
 		}
-	} else if data.k == reflect.Slice {
+	} else if dataTypeInfo.Kind == reflect.Slice {
 		// If the incoming type is slice but ours is not then we call set again using the last element in the slice.
-		if data.v.Len() > 0 {
-			return me.To(data.v.Index(data.v.Len() - 1).Interface())
+		if dataValue.Len() > 0 {
+			return me.To(dataValue.Index(dataValue.Len() - 1).Interface())
 		}
-	} else if err := coerce(me.WriteValue, data.v); err != nil {
-		// } else if err := coerce(me.pv, data.v); err != nil { // TODO RM
+	} else if err := coerce(me.WriteValue, dataValue); err != nil {
 		return errors.Go(err)
 	}
 	return nil
