@@ -115,7 +115,7 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	}
 	//
 	me.mut.RLock()
-	if rv, ok := me.known[v.pt]; ok {
+	if rv, ok := me.known[v.Type]; ok {
 		me.mut.RUnlock()
 		return rv, nil
 	}
@@ -126,12 +126,12 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	var scan func(v *Value, indeces []int, prefix string, indent int)
 	scan = func(v *Value, indeces []int, prefix string, indent int) {
 		for k, field := range v.Fields() {
-			if me.Ignored.Has(field.Value.pt) {
+			if me.Ignored.Has(field.Value.Type) {
 				continue
 			}
 			//
 			name := ""
-			if !me.Elevated.Has(field.Value.pt) {
+			if !me.Elevated.Has(field.Value.Type) {
 				for _, tagName := range append(me.Tags, "") {
 					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
 						name = tagValue
@@ -151,7 +151,7 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 				name = prefix
 			}
 			nameIndeces := append(indeces, k)
-			if _, ok := mapper_TreatAsScalar[field.Value.pt]; ok {
+			if _, ok := mapper_TreatAsScalar[field.Value.Type]; ok {
 				rv[name] = nameIndeces
 			} else if field.Value.IsStruct {
 				scan(field.Value, nameIndeces, name, indent+1)
@@ -171,7 +171,7 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me.known == nil {
 		me.known = make(map[reflect.Type]Mapping)
 	}
-	me.known[v.pt] = rv
+	me.known[v.Type] = rv
 	//
 	return rv, nil
 }
@@ -234,7 +234,7 @@ func (me *bound_mapping_t) Assignables(fields []string) ([]interface{}, error) {
 		if field, err := me.Field(name); err != nil {
 			return nil, errors.Errorf("%v while accessing field [%v]", err.Error(), name)
 		} else {
-			rv = append(rv, field.pv.Addr().Interface())
+			rv = append(rv, field.WriteValue.Addr().Interface())
 		}
 	}
 	return rv, nil
@@ -263,8 +263,8 @@ func (me *bound_mapping_t) Rebind(I interface{}) error {
 	} else {
 		v = V(I)
 	}
-	if v.pt != me.value.pt {
-		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.pv.Interface(), v.pv.Interface())
+	if v.Type != me.value.Type {
+		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.WriteValue.Interface(), v.WriteValue.Interface())
 	}
 	me.err = nil
 	me.value = v
