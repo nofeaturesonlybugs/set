@@ -37,7 +37,10 @@ func V(arg interface{}) *Value {
 	} else {
 		v = reflect.ValueOf(arg)
 	}
-	rv.WriteValue, rv.TypeInfo, rv.CanWrite = Writable(v)
+	if v.IsValid() {
+		rv.TypeInfo = TypeCache.StatType(v.Type())
+	}
+	rv.WriteValue, rv.CanWrite = Writable(v)
 	rv.TopValue = v
 
 	if rv.IsMap || rv.IsSlice {

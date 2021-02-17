@@ -5,14 +5,15 @@ import (
 )
 
 // Writable attempts to make a reflect.Value usable for writing.  It will follow and instantiate nil pointers if necessary.
-func Writable(v reflect.Value) (V reflect.Value, Info TypeInfo, CanWrite bool) {
+func Writable(v reflect.Value) (V reflect.Value, CanWrite bool) {
 	if !v.IsValid() {
 		return
-	} else if Info = TypeCache.StatType(v.Type()); Info.Type == nil || Info.Kind == reflect.Invalid {
+	}
+	T := v.Type()
+	K := T.Kind()
+	if T == nil || K == reflect.Invalid {
 		return
 	}
-	var K reflect.Kind
-	var T reflect.Type
 	V, T, K = v, v.Type(), v.Kind()
 	for K == reflect.Ptr {
 		if V.IsNil() && V.CanSet() {
