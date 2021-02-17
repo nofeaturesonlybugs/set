@@ -48,8 +48,10 @@ type Mapper struct {
 	Transform func(string) string
 
 	//
-	mut   sync.RWMutex
-	known map[reflect.Type]Mapping // Types that are known -- i.e. we've already created the mapping.
+	// Performance note:
+	//	Initially known was map[reflect.Type]Mapping and required a sync.RWMutex to protect access.
+	//	Similarly to the change in type_info_cache_t we changing both in favor of the sync.Map.
+	known sync.Map
 }
 
 // BoundMapping binds a Mapping to a specific variable instance V.
@@ -107,37 +109,38 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
 	}
-	var v *Value
-	if tv, ok := T.(*Value); ok {
-		v = tv
-	} else {
-		v = V(T)
+	var typeInfo TypeInfo
+	switch tt := T.(type) {
+	case *Value:
+		typeInfo = tt.TypeInfo
+	case reflect.Type:
+		typeInfo = TypeCache.StatType(tt)
+	default:
+		typeInfo = TypeCache.Stat(T)
 	}
 	//
-	me.mut.RLock()
-	if rv, ok := me.known[v.Type]; ok {
-		me.mut.RUnlock()
-		return rv, nil
+	if rv, ok := me.known.Load(typeInfo.Type); ok {
+		return rv.(Mapping), nil
 	}
-	me.mut.RUnlock()
 	//
 	rv := make(Mapping)
 	//
-	var scan func(v *Value, indeces []int, prefix string, indent int)
-	scan = func(v *Value, indeces []int, prefix string, indent int) {
-		for k, field := range v.Fields() {
-			if me.Ignored.Has(field.Value.Type) {
+	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
+	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
+		for k, field := range typeInfo.StructFields {
+			fieldTypeInfo := TypeCache.StatType(field.Type)
+			if me.Ignored.Has(fieldTypeInfo.Type) {
 				continue
 			}
 			//
 			name := ""
-			if !me.Elevated.Has(field.Value.Type) {
+			if !me.Elevated.Has(fieldTypeInfo.Type) {
 				for _, tagName := range append(me.Tags, "") {
-					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
+					if tagValue, ok := field.Tag.Lookup(tagName); ok {
 						name = tagValue
 						break
 					} else if tagName == "" {
-						name = field.Field.Name
+						name = field.Name
 						if me.Transform != nil {
 							name = me.Transform(name)
 						}
@@ -151,27 +154,22 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 				name = prefix
 			}
 			nameIndeces := append(indeces, k)
-			if _, ok := mapper_TreatAsScalar[field.Value.Type]; ok {
+			if _, ok := mapper_TreatAsScalar[fieldTypeInfo.Type]; ok {
 				rv[name] = nameIndeces
-			} else if field.Value.IsStruct {
-				scan(field.Value, nameIndeces, name, indent+1)
-			} else if field.Value.IsScalar {
+			} else if fieldTypeInfo.IsStruct {
+				scan(fieldTypeInfo, nameIndeces, name)
+			} else if fieldTypeInfo.IsScalar {
 				rv[name] = nameIndeces
 			}
 		}
 	}
-	scan(v, []int{}, "", 0)
+	scan(typeInfo, []int{}, "")
 	//
 	// Acquiring the write lock is delayed until after scanning because the desired use case is faster
 	// reads; the following lines are the smallest set in which the lock *MUST* be held.
 	//
 	// Our scan is complete so now we should assign the result to our known types.
-	me.mut.Lock()
-	defer me.mut.Unlock()
-	if me.known == nil {
-		me.known = make(map[reflect.Type]Mapping)
-	}
-	me.known[v.Type] = rv
+	me.known.Store(typeInfo.Type, rv)
 	//
 	return rv, nil
 }
