@@ -33,6 +33,9 @@ type TypeInfo struct {
 	// When IsMap or IsSlice are true then ElemType will be the reflect.Type for elements that can be directly
 	// inserted into the map or slice; it is not the type at the end of the chain if the element type is a pointer.
 	ElemType reflect.Type
+
+	// When IsStruct is true then StructFields will contain the reflect.StructField values for the struct.
+	StructFields []reflect.StructField
 }
 
 // TypeInfoCache builds a cache of TypeInfo types; when requesting TypeInfo for a type T that is a pointer
@@ -52,14 +55,19 @@ var TypeCache = NewTypeInfoCache()
 // NewTypeInfoCache creates a new TypeInfoCache.
 func NewTypeInfoCache() TypeInfoCache {
 	return &type_info_cache_t{
-		cache: map[reflect.Type]TypeInfo{},
+		cache: &sync.Map{},
 	}
 }
 
 // type_info_cache_t is the implementation of a TypeInfoCache for this package.
 type type_info_cache_t struct {
-	cache map[reflect.Type]TypeInfo
-	mut   sync.RWMutex
+	// Performance note:
+	//	Initially this was a map[reflect.Type]TypeInfo and we used a sync.RWMutex to control
+	//	access.  Switching to sync.Map removes the need for the RWMutex and changed
+	//	performance stats for StatType()
+	//		from:		360ms, 17.82% of Total
+	//		to:			120ms, 11.21% of Total
+	cache *sync.Map
 }
 
 // Stat accepts an arbitrary variable and returns the associated TypeInfo structure.
@@ -73,12 +81,9 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 	if T == nil {
 		return TypeInfo{}
 	}
-	me.mut.RLock()
-	if rv, ok := me.cache[T]; ok {
-		me.mut.RUnlock()
-		return rv
+	if rv, ok := me.cache.Load(T); ok {
+		return rv.(TypeInfo)
 	}
-	me.mut.RUnlock()
 	//
 	T_orig := T
 	//
@@ -107,12 +112,14 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 		K == reflect.String
 	if rv.IsMap || rv.IsSlice {
 		rv.ElemType = T.Elem()
+	} else if rv.IsStruct {
+		for k, size := 0, T.NumField(); k < size; k++ {
+			rv.StructFields = append(rv.StructFields, T.Field(k))
+		}
 	}
 	rv.Type, rv.Kind = T, K
 	//
-	me.mut.Lock()
-	defer me.mut.Unlock()
-	me.cache[T_orig] = rv
+	me.cache.Store(T_orig, rv)
 	//
 	return rv
 }
