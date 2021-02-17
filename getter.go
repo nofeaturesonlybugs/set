@@ -37,11 +37,10 @@ func MapGetter(m interface{}) Getter {
 			value := V(reflected.Interface())
 			if value.IsMap {
 				return MapGetter(reflected.Interface())
-			} else if value.IsSlice && value.Elem != nil && value.Elem.IsMap {
-				// A slice of maps; convert to a []Getter
+			} else if value.IsSlice && value.ElemTypeInfo.IsMap {
 				getterSlice := []Getter{}
-				for k, max := 0, value.pv.Len(); k < max; k++ {
-					getterSlice = append(getterSlice, MapGetter(value.pv.Index(k).Interface()))
+				for k, max := 0, value.WriteValue.Len(); k < max; k++ {
+					getterSlice = append(getterSlice, MapGetter(value.WriteValue.Index(k).Interface()))
 				}
 				return getterSlice
 			} else {
