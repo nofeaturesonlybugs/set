@@ -10,7 +10,7 @@ import (
 )
 
 func typeinfo_Invalid(i set.TypeInfo) bool {
-	return i.IsMap == false && i.IsScalar == false && i.IsSlice == false && i.IsStruct == false && i.Type == nil && i.ElemType == nil
+	return i.IsMap == false && i.IsScalar == false && i.IsSlice == false && i.IsStruct == false && i.Kind == reflect.Invalid && i.Type == nil && i.ElemType == nil
 }
 
 func TestTypeInfo(t *testing.T) {
@@ -41,47 +41,47 @@ func TestTypeInfo(t *testing.T) {
 			go func(idx int) {
 				<-ch
 				//
-				info = set.DefaultTypeInfoCache.Stat(nil)
+				info = set.TypeCache.Stat(nil)
 				chk.Equal(true, typeinfo_Invalid(info))
-				info = set.DefaultTypeInfoCache.Stat(err)
+				info = set.TypeCache.Stat(err)
 				chk.Equal(true, typeinfo_Invalid(info))
-				info = set.DefaultTypeInfoCache.Stat(rw)
+				info = set.TypeCache.Stat(rw)
 				chk.Equal(true, typeinfo_Invalid(info))
 				//
-				info = set.DefaultTypeInfoCache.Stat(s)
+				info = set.TypeCache.Stat(s)
 				chk.Equal(true, info.IsScalar)
 				chk.Equal(nil, info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(sp)
+				info = set.TypeCache.Stat(sp)
 				chk.Equal(true, info.IsScalar)
 				chk.Equal(nil, info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(spp)
+				info = set.TypeCache.Stat(spp)
 				chk.Equal(true, info.IsScalar)
 				chk.Equal(nil, info.ElemType)
 				//
-				info = set.DefaultTypeInfoCache.Stat(t)
+				info = set.TypeCache.Stat(t)
 				chk.Equal(true, info.IsStruct)
 				chk.Equal(nil, info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(tp)
+				info = set.TypeCache.Stat(tp)
 				chk.Equal(true, info.IsStruct)
 				chk.Equal(nil, info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(tpp)
+				info = set.TypeCache.Stat(tpp)
 				chk.Equal(true, info.IsStruct)
 				chk.Equal(nil, info.ElemType)
 				//
-				info = set.DefaultTypeInfoCache.Stat(m)
+				info = set.TypeCache.Stat(m)
 				chk.Equal(true, info.IsMap)
 				chk.Equal(reflect.TypeOf(""), info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(mp)
+				info = set.TypeCache.Stat(mp)
 				chk.Equal(true, info.IsMap)
-				info = set.DefaultTypeInfoCache.Stat(mpp)
+				info = set.TypeCache.Stat(mpp)
 				chk.Equal(true, info.IsMap)
 				//
-				info = set.DefaultTypeInfoCache.Stat(sl)
+				info = set.TypeCache.Stat(sl)
 				chk.Equal(true, info.IsSlice)
 				chk.Equal(reflect.TypeOf(struct{}{}), info.ElemType)
-				info = set.DefaultTypeInfoCache.Stat(slp)
+				info = set.TypeCache.Stat(slp)
 				chk.Equal(true, info.IsSlice)
-				info = set.DefaultTypeInfoCache.Stat(slpp)
+				info = set.TypeCache.Stat(slpp)
 				chk.Equal(true, info.IsSlice)
 				//
 				close(signals[idx])
@@ -110,25 +110,25 @@ func BenchmarkTypeInfo(b *testing.B) {
 	var slp *[]struct{}
 	var slpp *[]struct{}
 	for k := 0; k < b.N; k++ {
-		set.DefaultTypeInfoCache.Stat(nil)
-		set.DefaultTypeInfoCache.Stat(err)
-		set.DefaultTypeInfoCache.Stat(rw)
+		set.TypeCache.Stat(nil)
+		set.TypeCache.Stat(err)
+		set.TypeCache.Stat(rw)
 		//
-		set.DefaultTypeInfoCache.Stat(s)
-		set.DefaultTypeInfoCache.Stat(sp)
-		set.DefaultTypeInfoCache.Stat(spp)
+		set.TypeCache.Stat(s)
+		set.TypeCache.Stat(sp)
+		set.TypeCache.Stat(spp)
 		//
-		set.DefaultTypeInfoCache.Stat(t)
-		set.DefaultTypeInfoCache.Stat(tp)
-		set.DefaultTypeInfoCache.Stat(tpp)
+		set.TypeCache.Stat(t)
+		set.TypeCache.Stat(tp)
+		set.TypeCache.Stat(tpp)
 		//
-		set.DefaultTypeInfoCache.Stat(m)
-		set.DefaultTypeInfoCache.Stat(mp)
-		set.DefaultTypeInfoCache.Stat(mpp)
+		set.TypeCache.Stat(m)
+		set.TypeCache.Stat(mp)
+		set.TypeCache.Stat(mpp)
 		//
-		set.DefaultTypeInfoCache.Stat(sl)
-		set.DefaultTypeInfoCache.Stat(slp)
-		set.DefaultTypeInfoCache.Stat(slpp)
+		set.TypeCache.Stat(sl)
+		set.TypeCache.Stat(slp)
+		set.TypeCache.Stat(slpp)
 	}
 }
 
@@ -149,25 +149,25 @@ func BenchmarkTypeInfoParallel(b *testing.B) {
 		var slp *[]struct{}
 		var slpp *[]struct{}
 		for pb.Next() {
-			set.DefaultTypeInfoCache.Stat(nil)
-			set.DefaultTypeInfoCache.Stat(err)
-			set.DefaultTypeInfoCache.Stat(rw)
+			set.TypeCache.Stat(nil)
+			set.TypeCache.Stat(err)
+			set.TypeCache.Stat(rw)
 			//
-			set.DefaultTypeInfoCache.Stat(s)
-			set.DefaultTypeInfoCache.Stat(sp)
-			set.DefaultTypeInfoCache.Stat(spp)
+			set.TypeCache.Stat(s)
+			set.TypeCache.Stat(sp)
+			set.TypeCache.Stat(spp)
 			//
-			set.DefaultTypeInfoCache.Stat(t)
-			set.DefaultTypeInfoCache.Stat(tp)
-			set.DefaultTypeInfoCache.Stat(tpp)
+			set.TypeCache.Stat(t)
+			set.TypeCache.Stat(tp)
+			set.TypeCache.Stat(tpp)
 			//
-			set.DefaultTypeInfoCache.Stat(m)
-			set.DefaultTypeInfoCache.Stat(mp)
-			set.DefaultTypeInfoCache.Stat(mpp)
+			set.TypeCache.Stat(m)
+			set.TypeCache.Stat(mp)
+			set.TypeCache.Stat(mpp)
 			//
-			set.DefaultTypeInfoCache.Stat(sl)
-			set.DefaultTypeInfoCache.Stat(slp)
-			set.DefaultTypeInfoCache.Stat(slpp)
+			set.TypeCache.Stat(sl)
+			set.TypeCache.Stat(slp)
+			set.TypeCache.Stat(slpp)
 		}
 	})
 }

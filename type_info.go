@@ -22,8 +22,12 @@ type TypeInfo struct {
 	// True if the Value is a struct.
 	IsStruct bool
 
+	// Kind is the reflect.Kind; when Stat() or StatType() were called with a pointer this will be the final
+	// kind at the end of the pointer chain.  Otherwise it will be the original kind.
+	Kind reflect.Kind
+
 	// Type is the reflect.Type; when Stat() or StatType() were called with a poiner this will be the final
-	// type at the end of the poiner chain.  Otherwise it will be the original type.
+	// type at the end of the pointer chain.  Otherwise it will be the original type.
 	Type reflect.Type
 
 	// When IsMap or IsSlice are true then ElemType will be the reflect.Type for elements that can be directly
@@ -72,7 +76,6 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 	me.mut.RLock()
 	if rv, ok := me.cache[T]; ok {
 		me.mut.RUnlock()
-		// fmt.Printf("Cache hit for T= %v\n", T) //TODO RM
 		return rv
 	}
 	me.mut.RUnlock()
@@ -84,20 +87,15 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 	T = V.Type()
 	K := V.Kind()
 	//
-	// fmt.Printf("T=%v K=%v %#v\n", T, K, V.Interface()) // TODO RM
 	for K == reflect.Ptr {
-		// fmt.Printf("\t\tT=%v K=%v %#v\n", T, K, V.Interface()) // TODO RM
 		if V.IsNil() && V.CanSet() {
-			// fmt.Printf("\treflect.New ->\n") //TODO RM
 			ptr := reflect.New(T.Elem())
 			V.Set(ptr)
-			// fmt.Printf("\t\t\tT=%v K=%v %#v\n", T, K, V.Interface()) // TODO RM
 		}
 		K = T.Elem().Kind()
 		T = T.Elem()
 		V = V.Elem()
 	}
-	// fmt.Printf("\tT=%v K=%v %v\n", T, K, V) // TODO RM
 	//
 	rv.IsMap = K == reflect.Map
 	rv.IsSlice = K == reflect.Slice
@@ -107,10 +105,10 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 		K == reflect.Uint || K == reflect.Uint8 || K == reflect.Uint16 || K == reflect.Uint32 || K == reflect.Uint64 ||
 		K == reflect.Float32 || K == reflect.Float64 ||
 		K == reflect.String
-
 	if rv.IsMap || rv.IsSlice {
 		rv.ElemType = T.Elem()
 	}
+	rv.Type, rv.Kind = T, K
 	//
 	me.mut.Lock()
 	defer me.mut.Unlock()
