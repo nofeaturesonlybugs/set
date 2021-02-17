@@ -28,17 +28,10 @@ const (
 //	v := set.V(&bp)
 //	// bp now contains allocated memory.
 func V(arg interface{}) *Value {
-	var v reflect.Value
-	//
 	rv := &Value{}
 	rv.original = arg
 	//
-	rv.methodAppend = rv.appendUnsupported
-	rv.methodFields = rv.fieldsUnsupported
-	rv.methodFieldsByTag = rv.fieldsByTagUnsupported
-	rv.methodNewElem = rv.newElemUnsupported
-	rv.methodZero = rv.zeroUnsupported
-	//
+	var v reflect.Value
 	if argReflectValue, ok := arg.(reflect.Value); ok {
 		v = argReflectValue
 	} else {
@@ -48,26 +41,8 @@ func V(arg interface{}) *Value {
 	rv.TopValue = v
 
 	if rv.IsMap || rv.IsSlice {
-		// fmt.Printf("Adding support for...NewElem()\n") //TODO RM
 		rv.ElemTypeInfo = TypeCache.StatType(rv.ElemType)
-		rv.methodNewElem = rv.newElemSupported
 	}
-	//
-	if rv.CanWrite {
-		rv.methodZero = rv.zeroSupported
-	}
-	//
-	if rv.IsSlice {
-		// fmt.Printf("Adding support for...Append()\n") // TODO RM
-		rv.methodAppend = rv.appendSupported
-	}
-	if rv.IsStruct {
-		// fmt.Printf("Adding support for...Fields()\n")      //TODO RM
-		// fmt.Printf("Adding support for...FieldsByTag()\n") //TODO RM
-		rv.methodFields = rv.fieldsSupported
-		rv.methodFieldsByTag = rv.fieldsByTagSupported
-	}
-	//
 	return rv
 }
 
@@ -102,15 +77,14 @@ type Value struct {
 	// When IsMap or IsSlice are true then ElemTypeInfo is a TypeInfo struct describing the element types.
 	ElemTypeInfo TypeInfo
 
-	original interface{}
 	//
-	// We switch out method implementations depending on the original type arg.  We can organize this better
-	// but this is a rough first pass for improved benchmarking.
-	methodAppend      func(items ...interface{}) error
-	methodFields      func() []Field
-	methodFieldsByTag func(key string) []Field
-	methodNewElem     func() (*Value, error)
-	methodZero        func() error
+	original interface{}
+}
+
+// errorUnsupported returns a string that can be used in an error message to indicate the underlying original type
+// does not support the requested operation.
+func (me *Value) errorUnsupported(method string) string {
+	return fmt.Sprintf("%v is unsupported for original type [%T]", method, me.original)
 }
 
 // Append appends the item(s) to the end of the Value assuming it is some type of slice and every
@@ -120,17 +94,9 @@ type Value struct {
 func (me *Value) Append(items ...interface{}) error {
 	if me == nil {
 		return errors.NilReceiver()
+	} else if me.Kind != reflect.Slice {
+		return errors.Errorf(me.errorUnsupported("Append"))
 	}
-	return me.methodAppend(items...)
-}
-
-// errorUnsupported returns a string that can be used in an error message to indicate the underlying original type
-// does not support the requested operation.
-func (me *Value) errorUnsupported(method string) string {
-	return fmt.Sprintf("%v is unsupported for original type [%T]", method, me.original)
-}
-
-func (me *Value) appendSupported(items ...interface{}) error {
 	var err error
 	func() {
 		defer func() {
@@ -153,17 +119,12 @@ func (me *Value) appendSupported(items ...interface{}) error {
 	return err
 }
 
-func (me *Value) appendUnsupported(items ...interface{}) error {
-	return errors.Errorf(me.errorUnsupported("Append"))
-}
-
 // Fields returns a slice of Field structs when Value is wrapped around a struct; for all other values
 // nil is returned.
 func (me *Value) Fields() []Field {
-	return me.methodFields()
-}
-
-func (me *Value) fieldsSupported() []Field {
+	if me == nil || me.Kind != reflect.Struct {
+		return nil
+	}
 	var rv []Field
 	if me != nil && me.IsStruct {
 		for k, max := 0, me.Type.NumField(); k < max; k++ {
@@ -172,9 +133,6 @@ func (me *Value) fieldsSupported() []Field {
 		}
 	}
 	return rv
-}
-func (me *Value) fieldsUnsupported() []Field {
-	return nil
 }
 
 // FieldByIndex returns the nested field corresponding to index.
@@ -220,10 +178,9 @@ func (me *Value) FieldByIndex(index []int) (*Value, error) {
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
 // TagValue member of Field will be set to the tag's value.
 func (me *Value) FieldsByTag(key string) []Field {
-	return me.methodFieldsByTag(key)
-}
-
-func (me *Value) fieldsByTagSupported(key string) []Field {
+	if me == nil || me.Kind != reflect.Struct {
+		return nil
+	}
 	var rv []Field
 	all := me.Fields()
 	for _, f := range all {
@@ -233,10 +190,6 @@ func (me *Value) fieldsByTagSupported(key string) []Field {
 		}
 	}
 	return rv
-}
-
-func (me *Value) fieldsByTagUnsupported(key string) []Field {
-	return nil
 }
 
 // fill is the underlying function that powers Fill() and FillByTag().
@@ -336,17 +289,11 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 func (me *Value) Zero() error {
 	if me == nil {
 		return errors.NilReceiver()
+	} else if !me.CanWrite || me.Kind == reflect.Invalid {
+		return errors.Errorf(me.errorUnsupported("Zero"))
 	}
-	return me.methodZero()
-}
-
-func (me *Value) zeroSupported() error {
 	me.WriteValue.Set(reflect.Zero(me.Type))
 	return nil
-}
-
-func (me *Value) zeroUnsupported() error {
-	return errors.Errorf(me.errorUnsupported("Zero"))
 }
 
 // NewElem instantiates and returns a *Value that can be Panics.Append()'ed to this type; only valid
@@ -354,15 +301,10 @@ func (me *Value) zeroUnsupported() error {
 func (me *Value) NewElem() (*Value, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
+	} else if me.ElemTypeInfo.Kind == reflect.Invalid {
+		return nil, errors.Errorf(me.errorUnsupported("NewElem"))
 	}
-	return me.methodNewElem()
-}
-
-func (me *Value) newElemSupported() (*Value, error) {
 	return V(reflect.New(me.ElemType)), nil
-}
-func (me *Value) newElemUnsupported() (*Value, error) {
-	return nil, errors.Errorf(me.errorUnsupported("NewElem"))
 }
 
 // To attempts to assign the argument into Value; Value is always set to the Zero value for its type before
@@ -389,18 +331,64 @@ func (me *Value) newElemUnsupported() (*Value, error) {
 //		-> Note: If the elements themselves are pointers then, for example, T[0] and S[0] point
 //			at the same memory and will see changes to whatever is pointed at.
 func (me *Value) To(arg interface{}) error {
-	var err error
+	// Performance note(s):
+	//	Early versions of this called me.Zero() and then simply returned on error or for incompatible types.
+	//	It turns out the call to Zero() can be relatively expensive in terms of ns/op and memory allocations.
+	//	We now explicitly call me.Zero only on those conditions where we are returning without actually
+	//	changing me.WriteValue.
 	//
-	dataTypeInfo := TypeCache.Stat(arg)
-	if me.original == nil {
+	if me == nil {
+		return errors.NilReceiver()
+	} else if me.original == nil || !me.CanWrite || me.Kind == reflect.Invalid {
 		return errors.Errorf(me.errorUnsupported("To"))
-	} else if err = me.Zero(); err != nil {
-		return err
-	} else if arg == nil || dataTypeInfo.Kind == reflect.Invalid {
-		return nil
-	} else if dataTypeInfo.Type.AssignableTo(me.Type) && me.Kind != reflect.Slice {
+	}
+	T := reflect.TypeOf(arg)
+	if arg == nil || T == nil {
+		return me.Zero()
+	} else if (T == me.Type || T.AssignableTo(me.Type)) && me.Kind != reflect.Slice {
 		// N.B: We checked that me.Kind is not a slice because this package always makes a copy of a slice!
-		me.WriteValue.Set(reflect.ValueOf(arg))
+		//
+		// Performance note(s):
+		//	(T == me.Type || T.AssignableTo(me.Type)) will short-circuit the call to T.AssignableTo() for
+		//		basic types, further increasing performance (from 4.20% of Total down to 1.79%)
+		//
+		//	Early versions of this simply did:
+		//		me.WriteValue.Set(reflect.ValueOf(arg))
+		//		For basic built-in types this is relatively expensive, hence the type switch.
+		//		Pre-bench: 		210ms within To() (9.50% of Total), 140ms in original statement.
+		//		Post-bench:		50ms within To() (4.20% of Total), 10ms spread across calls to me.WriteValue.SetT()
+		switch tt := arg.(type) {
+		case bool:
+			me.WriteValue.SetBool(tt)
+		case int:
+			me.WriteValue.SetInt(int64(tt))
+		case int8:
+			me.WriteValue.SetInt(int64(tt))
+		case int16:
+			me.WriteValue.SetInt(int64(tt))
+		case int32:
+			me.WriteValue.SetInt(int64(tt))
+		case int64:
+			me.WriteValue.SetInt(tt)
+		case uint:
+			me.WriteValue.SetUint(uint64(tt))
+		case uint8:
+			me.WriteValue.SetUint(uint64(tt))
+		case uint16:
+			me.WriteValue.SetUint(uint64(tt))
+		case uint32:
+			me.WriteValue.SetUint(uint64(tt))
+		case uint64:
+			me.WriteValue.SetUint(tt)
+		case float32:
+			me.WriteValue.SetFloat(float64(tt))
+		case float64:
+			me.WriteValue.SetFloat(tt)
+		case string:
+			me.WriteValue.SetString(tt)
+		default:
+			me.WriteValue.Set(reflect.ValueOf(arg))
+		}
 		return nil
 	}
 	//
@@ -408,30 +396,38 @@ func (me *Value) To(arg interface{}) error {
 	dataValue := reflect.ValueOf(arg)
 	for ; dataValue.Kind() == reflect.Ptr; dataValue = reflect.Indirect(dataValue) {
 		if dataValue.IsNil() { // If arg is a pointer and eventually nil we're done because we're already zero value.
-			return nil
+			return me.Zero()
 		}
 	}
+	dataTypeInfo := TypeCache.StatType(dataValue.Type())
 	//
 	if me.IsSlice {
+		if err := me.Zero(); err != nil {
+			return errors.Go(err)
+		}
 		if !dataTypeInfo.IsSlice {
 			arg = []interface{}{arg}
 		}
 		slice := reflect.ValueOf(arg)
 		for k, size := 0, slice.Len(); k < size; k++ {
 			elem := V(reflect.New(me.ElemType).Interface())
-			if err = elem.To(slice.Index(k).Interface()); err != nil {
+			if err := elem.To(slice.Index(k).Interface()); err != nil {
 				me.Zero()
 				return err
 			}
 			me.WriteValue.Set(reflect.Append(me.WriteValue, elem.WriteValue))
 		}
+		return nil
 	} else if dataTypeInfo.Kind == reflect.Slice {
 		// If the incoming type is slice but ours is not then we call set again using the last element in the slice.
 		if dataValue.Len() > 0 {
 			return me.To(dataValue.Index(dataValue.Len() - 1).Interface())
 		}
-	} else if err := coerce(me.WriteValue, dataValue); err != nil {
-		return errors.Go(err)
+	} else if me.IsScalar {
+		if err := coerce(me.WriteValue, dataValue); err != nil {
+			return errors.Go(err)
+		}
+		return nil
 	}
-	return nil
+	return me.Zero()
 }
