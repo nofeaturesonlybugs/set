@@ -87,11 +87,9 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	if err != nil {
 		return nil, errors.Go(err)
 	}
-	rv := &bound_mapping_t{
-		value:   v,
-		mapping: mapping,
-	}
+	rv := new_bound_mapping_t(v, mapping)
 	return rv, nil
+
 }
 
 // Map adds T to the Mapper's list of known and recognized types.
@@ -163,12 +161,8 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 			}
 		}
 	}
+	// Scan and assign the result to our known types.
 	scan(typeInfo, []int{}, "")
-	//
-	// Acquiring the write lock is delayed until after scanning because the desired use case is faster
-	// reads; the following lines are the smallest set in which the lock *MUST* be held.
-	//
-	// Our scan is complete so now we should assign the result to our known types.
 	me.known.Store(typeInfo.Type, rv)
 	//
 	return rv, nil
@@ -220,6 +214,14 @@ type bound_mapping_t struct {
 	err     error
 }
 
+// new_bound_mapping_t creates a new bound_mapping_t type.
+func new_bound_mapping_t(value *Value, mapping Mapping) *bound_mapping_t {
+	return &bound_mapping_t{
+		value:   value,
+		mapping: mapping,
+	}
+}
+
 // Assignables returns a slice of interfaces by field names where each element is a pointer
 // to the field in the bound variable.
 //
@@ -248,7 +250,11 @@ func (me *bound_mapping_t) Err() error {
 // Field returns the *Value for field.
 func (me *bound_mapping_t) Field(field string) (*Value, error) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	return me.value.FieldByIndex(me.mapping.Get(field))
+	if v, err := me.value.FieldByIndex(me.mapping.Get(field)); err != nil {
+		return nil, errors.Go(err)
+	} else {
+		return V(v), nil
+	}
 }
 
 // Rebind will replace the currently bound value with the new variable I.  If the underlying types are
@@ -262,14 +268,66 @@ func (me *bound_mapping_t) Rebind(I interface{}) error {
 // Set effectively sets V[field] = value.
 func (me *bound_mapping_t) Set(field string, value interface{}) error {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	v, err := me.value.FieldByIndex(me.mapping.Get(field))
+	fieldValue, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
 		if me.err == nil {
 			me.err = errors.Go(err)
 		}
 		return errors.Go(err)
 	}
-	err = v.To(value)
+	//
+	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
+	// which will cut down our allocations and increase speed.
+	if fieldValue.Type() == reflect.TypeOf(value) {
+		switch tt := value.(type) {
+		case bool:
+			fieldValue.SetBool(tt)
+			return nil
+		case int:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int8:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int16:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int32:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int64:
+			fieldValue.SetInt(tt)
+			return nil
+		case uint:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint8:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint16:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint32:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint64:
+			fieldValue.SetUint(tt)
+			return nil
+		case float32:
+			fieldValue.SetFloat(float64(tt))
+			return nil
+		case float64:
+			fieldValue.SetFloat(tt)
+			return nil
+		case string:
+			fieldValue.SetString(tt)
+			return nil
+		}
+	}
+	//
+	// If the type-switch above didn't hit then we'll coerce the
+	// fieldValue to a *Value and use our swiss-army knife Value.To().
+	err = V(fieldValue).To(value)
 	if err != nil && me.err == nil {
 		me.err = errors.Errorf("While setting [%v]: %v", field, err.Error())
 	}
