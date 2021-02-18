@@ -25,8 +25,7 @@ const (
 //
 //	// Memory is created because the local variable is an unallocated pointer AND we pass its address.
 //	var *bp bool
-//	v := set.V(&bp)
-//	// bp now contains allocated memory.
+//	v := set.V(&bp) // bp now contains allocated memory.
 func V(arg interface{}) *Value {
 	rv := &Value{}
 	rv.original = arg
@@ -72,7 +71,7 @@ type Value struct {
 	//
 	// If you call V( &t ) then CanWrite will be true and WriteValue will be a usable reflect.Value.
 	// If you call V( t ) where t is not a pointer or does not point to allocated memory then
-	// CanWrite will be false and attempt to set values on WriteValue will probably panic.
+	// CanWrite will be false and any attempt to set values on WriteValue will probably panic.
 	//
 	// All methods on this type that alter the value Append(), Fill*(), To(), etc work on this
 	// value.  Generally you should avoid it but it's also present if you really know what you're doing.
@@ -125,6 +124,9 @@ func (me *Value) Append(items ...interface{}) error {
 
 // Fields returns a slice of Field structs when Value is wrapped around a struct; for all other values
 // nil is returned.
+//
+// This function has some overhead because it creates a new *Value for each struct field.  If you only need
+// the reflect.StructField information consider using the public StructFields member.
 func (me *Value) Fields() []Field {
 	if me == nil || me.Kind != reflect.Struct {
 		return nil
@@ -313,15 +315,15 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 //	var slice []T
 //	// populate slice
 //	for _, item := range slice {
-//		v := set.V( item )
+//		v := set.V( item ) // Creates new *Value every iteration -- can be expensive!
 //		// manipulate v in order to affect item
 //	}
 // to:
 //	var slice []T
-//	v := set.V( T{} ) // Create v and gather type information
+//	v := set.V( T{} ) // Create a single *Value for the type T
 //	// populate slice
 //	for _, item := range slice {
-//		if err := v.Rebind( item ); err != nil {
+//		if err := v.Rebind( item ); err != nil { // Reuse the existing *Value -- will be faster!
 //			// Handle error
 //		}
 //		// manipulate v in order to affect item
@@ -361,7 +363,7 @@ func (me *Value) Zero() error {
 }
 
 // NewElem instantiates and returns a *Value that can be Panics.Append()'ed to this type; only valid
-// if Value.Elem is non-nil.
+// if Value.ElemType describes a valid type.
 func (me *Value) NewElem() (*Value, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()
@@ -371,8 +373,13 @@ func (me *Value) NewElem() (*Value, error) {
 	return V(reflect.New(me.ElemType)), nil
 }
 
-// To attempts to assign the argument into Value; Value is always set to the Zero value for its type before
-// any other assignment ensuring if an assignment fails for any reason that any old data is overwritten.
+// To attempts to assign the argument into Value.
+//
+// If *Value is wrapped around an unwritable reflect.Value or the type is reflect.Invalid an
+// error will be returned.  You probably forgot to call set.V() with an address to your type.
+//
+// If the assignment can not be made but the wrapped value is writable then the wrapped
+// value will be set to an appropriate zero type to overwrite any existing data.
 //
 // 	set.V(&T).To(S)
 //

@@ -24,12 +24,16 @@ type Mapping map[string][]int
 // Mapper is used to traverse structures to create Mappings and then navigate the nested
 // structure using string keys.
 type Mapper struct {
-	// A slice of type instances that should be ignored during name generation.
+	// If the types you wish to map contain embedded structs or interfaces you do not
+	// want to map to string names include those types in the Ignored member.
+	//
+	// See also NewTypeList().
 	Ignored TypeList
 	//
-	// During name generation types in the `Elevated` member will not have the name affected
-	// by the struct field name or data type.  Use this for struct members or embedded structs
-	// when you do not want their name or type affecting the generated name.
+	// Struct fields that are also structs or embedded structs will have their name
+	// as part of the generated name unless it is included in the Elevated member.
+	//
+	// See also NewTypeList().
 	Elevated TypeList
 	//
 	// A list of struct tags that will be used for name generation in order of preference.
@@ -101,8 +105,8 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 // If you depend on Map returning the same instance of Mapping for a type T every time it is called then
 // you should call it once for each possible type T synchronously before using the Mapper in your goroutines.
 //
-// Mappings that are returned should not be written to or altered in any way.  If this is your use-case then
-// create a copy of the Mapping with Mapping.Copy.
+// Mappings that are returned are shared resources and should not be altered in any way.  If this is your
+// use-case then create a copy of the Mapping with Mapping.Copy.
 func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me == nil {
 		return nil, errors.NilReceiver()

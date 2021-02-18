@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// TypeInfo describes information about a type that is pertinent to this package.
+// TypeInfo summarizes information about a type T in a meaningful way for this package.
 type TypeInfo struct {
 	// True if the Value is a scalar type:
 	//	bool, float32, float64, string
@@ -26,7 +26,7 @@ type TypeInfo struct {
 	// kind at the end of the pointer chain.  Otherwise it will be the original kind.
 	Kind reflect.Kind
 
-	// Type is the reflect.Type; when Stat() or StatType() were called with a poiner this will be the final
+	// Type is the reflect.Type; when Stat() or StatType() were called with a pointer this will be the final
 	// type at the end of the pointer chain.  Otherwise it will be the original type.
 	Type reflect.Type
 
@@ -39,9 +39,9 @@ type TypeInfo struct {
 }
 
 // TypeInfoCache builds a cache of TypeInfo types; when requesting TypeInfo for a type T that is a pointer
-// the TypeInfo returned will describe the type *T (or ******T) at the end of the pointer chain.
+// the TypeInfo returned will describe the type T' at the end of the pointer chain.
 //
-// When Stat() or StatType() are called with nil or an Interface(nil) a zero TypeInfo is returned; essentially
+// If Stat() or StatType() are called with nil or an Interface(nil) then a zero TypeInfo is returned; essentially
 // nothing useful can be done with the type needed to be described.
 type TypeInfoCache interface {
 	// Stat accepts an arbitrary variable and returns the associated TypeInfo structure.
