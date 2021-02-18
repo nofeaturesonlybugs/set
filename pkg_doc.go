@@ -127,12 +127,12 @@
 //	var t []bool
 //	var s []interface{}
 //	s = []interface{}{ "true", 0, float64(1) }
-//	set.V(&t).To(s) // b is []bool{ true, false, true }
+//	set.V(&t).To(s) // t is []bool{ true, false, true }
 //
 //	var t []bool
 //	var s []bool
 //	s = []bool{ true, false, true }
-//	set.V(&t).To(s) // b is []bool{ true, false, true } and t != s
+//	set.V(&t).To(s) // t is []bool{ true, false, true } and t != s
 //
 // If a single element within []S can not be coerced into an element of T then []T will be empty:
 //	var t []int
