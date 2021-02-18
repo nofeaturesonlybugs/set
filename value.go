@@ -144,22 +144,23 @@ func (me *Value) Fields() []Field {
 // Key differences between this method and the built-in method on reflect.Value.FieldByIndex() are
 // the built-in causes panics while this one will return errors and this method will instantiate nil struct
 // members as it traverses.
-func (me *Value) FieldByIndex(index []int) (*Value, error) {
+func (me *Value) FieldByIndex(index []int) (reflect.Value, error) {
+	v := reflect.Value{}
 	size := len(index)
 	if me == nil {
-		return nil, errors.NilReceiver()
+		return v, errors.NilReceiver()
 	} else if !me.CanWrite {
-		return nil, errors.Errorf(error_V_NotAssignable)
+		return v, errors.Errorf(me.errorUnsupported("FieldByIndex"))
 	} else if size == 0 {
-		return nil, errors.Errorf("Zero length index provided to FieldByIndex()")
+		return v, errors.Errorf("Zero length index provided to FieldByIndex()")
 	}
-	v := me.WriteValue
+	v = me.WriteValue
 	for k := 0; k < size; k++ {
 		n := index[k] // n is the index (or field num) to consider
 		if v.Kind() != reflect.Struct {
-			return nil, errors.Errorf("FieldByIndex requires type to be a struct; type is %v", v.Type())
+			return v, errors.Errorf("FieldByIndex requires type to be a struct; type is %v", v.Type())
 		} else if n > v.NumField() {
-			return nil, errors.Errorf("Index out of bounds; field is len %v and index is %v", v.NumField(), n)
+			return v, errors.Errorf("Index out of bounds; field is len %v and index is %v", v.NumField(), n)
 		}
 		v = v.Field(n)
 		t, k := v.Type(), v.Kind()
@@ -176,7 +177,17 @@ func (me *Value) FieldByIndex(index []int) (*Value, error) {
 			}
 		}
 	}
-	return V(v), nil
+	return v, nil
+}
+
+// FieldByIndexAsValue calls into FieldByIndex and if there is no error the resulting reflect.Value is
+// wrapped within a call to V() to return a *Value.
+func (me *Value) FieldByIndexAsValue(index []int) (*Value, error) {
+	if v, err := me.FieldByIndex(index); err != nil {
+		return nil, errors.Go(err)
+	} else {
+		return V(v), nil
+	}
 }
 
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the

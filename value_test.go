@@ -1232,14 +1232,14 @@ func TestValue_fieldByIndex(t *testing.T) {
 		outer := set.V(&data)
 		//
 		// Combined.Child.Pk
-		field, err = outer.FieldByIndex([]int{0, 0, 0})
+		field, err = outer.FieldByIndexAsValue([]int{0, 0, 0})
 		chk.NoError(err)
 		chk.NotNil(field)
 		err = field.To(15)
 		chk.NoError(err)
 		chk.Equal(15, data.Child.Pk)
 		// Combined.Emergency.Name
-		field, err = outer.FieldByIndex([]int{2, 1})
+		field, err = outer.FieldByIndexAsValue([]int{2, 1})
 		chk.NoError(err)
 		chk.NotNil(field)
 		err = field.To("Bob")
@@ -1265,7 +1265,7 @@ func TestValue_fieldByIndex(t *testing.T) {
 		var data Combined
 		outer := set.V(&data)
 		set := func(indeces []int, arg interface{}) {
-			field, err = outer.FieldByIndex(indeces)
+			field, err = outer.FieldByIndexAsValue(indeces)
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(arg)
@@ -1309,13 +1309,13 @@ func TestValue_fieldByIndex(t *testing.T) {
 		chk.Equal(25, data.Emergency.Age)
 		//
 		// Index out of bounds
-		field, err = outer.FieldByIndex([]int{0, 0, 4})
+		field, err = outer.FieldByIndexAsValue([]int{0, 0, 4})
 		chk.Nil(field)
 		chk.Error(err)
-		field, err = outer.FieldByIndex([]int{0, 6})
+		field, err = outer.FieldByIndexAsValue([]int{0, 6})
 		chk.Nil(field)
 		chk.Error(err)
-		field, err = outer.FieldByIndex([]int{10})
+		field, err = outer.FieldByIndexAsValue([]int{10})
 		chk.Nil(field)
 		chk.Error(err)
 	}
@@ -1334,34 +1334,41 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	}
 	var a A
 
-	field, err = value.FieldByIndex(nil)
+	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
 	chk.Nil(field)
 	//
 	value = set.V(map[string]string{})
-	field, err = value.FieldByIndex(nil)
+	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
 	chk.Nil(field)
 	//
 	value = set.V(a)
-	field, err = value.FieldByIndex([]int{0})
+	field, err = value.FieldByIndexAsValue([]int{0})
 	chk.Error(err)
 	chk.Nil(field)
 	//
 	value = set.V(&a)
-	field, err = value.FieldByIndex(nil)
+	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
 	chk.Nil(field)
-	field, err = value.FieldByIndex([]int{})
+	field, err = value.FieldByIndexAsValue([]int{})
 	chk.Error(err)
 	chk.Nil(field)
 	//
 	{ // Test scalar, aka something not indexable.
 		var b bool
 		value = set.V(&b)
-		field, err := value.FieldByIndex([]int{1, 2})
-		chk.Error(err)
-		chk.Nil(field)
+		{ // When reflect.Value is returned
+			field, err := value.FieldByIndex([]int{1, 2})
+			chk.Error(err)
+			chk.Equal(true, field.IsValid())
+		}
+		{ // When *Value is returned
+			field, err := value.FieldByIndexAsValue([]int{1, 2})
+			chk.Error(err)
+			chk.Nil(field)
+		}
 	}
 }
 
