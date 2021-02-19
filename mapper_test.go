@@ -222,7 +222,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		var mapper *set.Mapper
 		mapping, err := mapper.Map(struct{}{})
 		chk.Error(err)
-		chk.Nil(mapping)
+		chk.Nil(mapping.Indeces)
 		bound, err := mapper.Bind(struct{}{})
 		chk.Error(err)
 		chk.Nil(bound)
@@ -256,17 +256,17 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.NotNil(m1)
 		m2 := m1.Copy()
 		chk.NotNil(m2)
-		chk.Equal(len(m1), len(m2))
-		m2["A"] = nil
-		m2["B"] = nil
-		chk.NotEqual(len(m1["A"]), len(m2["A"]))
-		chk.NotEqual(len(m1["B"]), len(m2["B"]))
+		chk.Equal(len(m1.Indeces), len(m2.Indeces))
+		m2.Indeces["A"] = nil
+		m2.Indeces["B"] = nil
+		chk.NotEqual(len(m1.Indeces["A"]), len(m2.Indeces["A"]))
+		chk.NotEqual(len(m1.Indeces["B"]), len(m2.Indeces["B"]))
 	}
 	{ // Tests Mapping.Copy when Mapping is nil
 		var m1 set.Mapping
 		m2 := m1.Copy()
-		chk.Nil(m1)
-		chk.Nil(m2)
+		chk.Nil(m1.Indeces)
+		chk.Nil(m2.Indeces)
 	}
 	{ // Tests BoundMapping when value V is not a struct.
 		var b bool

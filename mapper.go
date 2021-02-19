@@ -19,7 +19,13 @@ var mapper_TreatAsScalar = map[reflect.Type]struct{}{
 // Mapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
 //	Key is a string key representing a common or friendly name for the nested struct member.
 //	Indeces is an []int that can be used to index to the proper struct member.
-type Mapping map[string][]int
+type Mapping struct {
+	Indeces   map[string][]int
+	CacheInfo map[string]struct {
+		Indeces  []int
+		SharedId int
+	}
+}
 
 // Mapper is used to traverse structures to create Mappings and then navigate the nested
 // structure using string keys.
@@ -109,7 +115,7 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 // use-case then create a copy of the Mapping with Mapping.Copy.
 func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	if me == nil {
-		return nil, errors.NilReceiver()
+		return Mapping{}, errors.NilReceiver()
 	}
 	var typeInfo TypeInfo
 	switch tt := T.(type) {
@@ -125,7 +131,14 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 		return rv.(Mapping), nil
 	}
 	//
-	rv := make(Mapping)
+	rv := Mapping{
+		Indeces: map[string][]int{},
+		CacheInfo: map[string]struct {
+			Indeces  []int
+			SharedId int
+		}{},
+	}
+	// rv := make(Mapping) // TODO RM
 	//
 	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
 	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
@@ -157,11 +170,11 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 			}
 			nameIndeces := append(indeces, k)
 			if _, ok := mapper_TreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv[name] = nameIndeces
+				rv.Indeces[name] = nameIndeces
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name)
 			} else if fieldTypeInfo.IsScalar {
-				rv[name] = nameIndeces
+				rv.Indeces[name] = nameIndeces
 			}
 		}
 	}
@@ -174,12 +187,20 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 
 // Copy creates a copy of the Mapping.
 func (me Mapping) Copy() Mapping {
-	if me == nil {
-		return nil
-	}
-	rv := make(Mapping)
-	for k, v := range me {
-		rv[k] = append([]int{}, v...)
+	rv := Mapping{}
+	// if me.Indeces == nil { // TODO RM
+	// 	return rv // TODO RM
+	// } // TODO RM
+	// rv := make(Mapping)// TODO RM
+	if me.Indeces != nil {
+		rv.Indeces = map[string][]int{}
+		rv.CacheInfo = map[string]struct {
+			Indeces  []int
+			SharedId int
+		}{}
+		for k, v := range me.Indeces { // TODO Can range a nil map so we can make changes here.
+			rv.Indeces[k] = append([]int{}, v...)
+		}
 	}
 	return rv
 }
@@ -194,17 +215,17 @@ func (me Mapping) Get(key string) []int {
 // Lookup returns the value associated with key in the mapping.  If no such key is
 // found a nil slice is returned and ok is false; otherwise ok is true.
 func (me Mapping) Lookup(key string) (indeces []int, ok bool) {
-	if me == nil {
+	if me.Indeces == nil {
 		return nil, false
 	}
-	indeces, ok = me[key]
+	indeces, ok = me.Indeces[key]
 	return indeces, ok
 }
 
 // String returns the Mapping as a string value.
 func (me Mapping) String() string {
 	parts := []string{}
-	for str, indeces := range me {
+	for str, indeces := range me.Indeces {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
 	}
 	sort.Strings(parts)
