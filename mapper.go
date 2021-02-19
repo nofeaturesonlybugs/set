@@ -21,7 +21,7 @@ var mapper_TreatAsScalar = map[reflect.Type]struct{}{
 //	Indeces is an []int that can be used to index to the proper struct member.
 type Mapping struct {
 	Indeces map[string][]int
-	// CacheInfo map[string]struct {
+	// CacheInfo map[string]struct { // TODO
 	// 	Indeces  []int
 	// 	SharedId int
 	// }
