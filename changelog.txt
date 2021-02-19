@@ -1,9 +1,8 @@
-/branch-benchmark
+/branch-mapper
+    + Add Mapper, Mapping, BoundMapping
     + Add TypeInfo, TypeInfoCache
     + Add global TypeCache as an instance of TypeInfoCache.
     
-/branch-mapper
-
 /develop
 
 0.1.2
