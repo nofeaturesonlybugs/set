@@ -258,13 +258,37 @@
 // Populating Structs with Mapper, Mapping, and BoundMap
 //
 // If you need to populate or traverse structs using strings as lookups consider using a Mapper.  A Mapper traverses a type T
-// and generates a Mapping, where a Mapping is currently implemented as a map[string][]int.
+// and generates a Mapping which contains members to facilitate accessing struct field indeces with strings.
 //
-// When you index into a Mapping you will receive a slice of ints representing the indeces into the nested structure
+// When you index into Mapping.Indeces you will receive a slice of ints representing the indeces into the nested structure
 // to the desired field.
 //
 // For convenience a Mapper can create a BoundMapping which binds the Mapping to an instance of T.  The BoundMapping
 // can then be used to update the data within the instance.  See the BoundMapping examples.
+//
+// Rebinding
+//
+// Both Value and BoundMapping support Rebind().  There is an amount of overhead instantiating either
+// Value or BoundMapping and most of that overhead occurs with type introspection via reflect.  In tight-loop situations
+// where either *Value or BoundMapping are used to alter many values of the same type this overhead
+// can be costly and is unnecessary since the first *Value or BoundMapping already contains the type information.
+//
+// For optimal performance in tight loop situations create a single instance of *Value or BoundMapping and then
+// call Rebind() with a new instance of data you wish to manipulate.
+//
+// For example change:
+//	for _, value := range someSliceOfTypeT {
+//		v := set.V( &value )			// <-- Expensive -- type information gathered for each instance created.
+//		// do something with v
+//	}
+// to:
+//	v := set.Value( &T{} ) // Create v once!
+//	for _, value := range someSliceOfTypeT {
+//		if err := v.Rebind( &value )	{ // <-- Reuses existing type information -- more performant!
+//			// handle error
+//		}
+//		// do something with v
+//	}
 //
 // Examples Subdirectory
 //
