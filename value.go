@@ -329,11 +329,7 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 //		// manipulate v in order to affect item
 //	}
 //
-// If an error is returned the original value is still in place.
-func (me *Value) Rebind(arg interface{}) error {
-	if me == nil {
-		return errors.NilReceiver()
-	}
+func (me *Value) Rebind(arg interface{}) {
 	var v reflect.Value
 	switch tt := arg.(type) {
 	case reflect.Value:
@@ -344,11 +340,11 @@ func (me *Value) Rebind(arg interface{}) error {
 		v = reflect.ValueOf(arg)
 	}
 	if me.TopValue.Type() != v.Type() {
-		return errors.Errorf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg)
+		panic(fmt.Sprintf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg))
 	}
 	me.original, me.TopValue = arg, v
 	me.WriteValue, me.CanWrite = Writable(v)
-	return nil
+	return
 }
 
 // Zero sets the Value to the Zero value of the appropriate type.

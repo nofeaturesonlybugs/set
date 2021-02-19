@@ -282,12 +282,11 @@ func (me *bound_mapping_t) Field(field string) (*Value, error) {
 	}
 }
 
-// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
-// not the same then an error is returned.
-func (me *bound_mapping_t) Rebind(I interface{}) error {
+// Rebind will replace the currently bound value with the new variable I.
+func (me *bound_mapping_t) Rebind(I interface{}) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
 	me.err = nil
-	return me.value.Rebind(I)
+	me.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
