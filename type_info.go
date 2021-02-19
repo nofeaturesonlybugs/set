@@ -50,17 +50,18 @@ type TypeInfoCache interface {
 	StatType(T reflect.Type) TypeInfo
 }
 
+// TypeCache is a global TypeInfoCache
 var TypeCache = NewTypeInfoCache()
 
 // NewTypeInfoCache creates a new TypeInfoCache.
 func NewTypeInfoCache() TypeInfoCache {
-	return &type_info_cache_t{
+	return &typeInfoCache{
 		cache: &sync.Map{},
 	}
 }
 
-// type_info_cache_t is the implementation of a TypeInfoCache for this package.
-type type_info_cache_t struct {
+// typeInfoCache is the implementation of a TypeInfoCache for this package.
+type typeInfoCache struct {
 	// Performance note:
 	//	Initially this was a map[reflect.Type]TypeInfo and we used a sync.RWMutex to control
 	//	access.  Switching to sync.Map removes the need for the RWMutex and changed
@@ -71,13 +72,13 @@ type type_info_cache_t struct {
 }
 
 // Stat accepts an arbitrary variable and returns the associated TypeInfo structure.
-func (me *type_info_cache_t) Stat(T interface{}) TypeInfo {
+func (me *typeInfoCache) Stat(T interface{}) TypeInfo {
 	t := reflect.TypeOf(T)
 	return me.StatType(t)
 }
 
 // StatType is the same as Stat() except it expects a reflect.Type.
-func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
+func (me *typeInfoCache) StatType(T reflect.Type) TypeInfo {
 	if T == nil {
 		return TypeInfo{}
 	}
@@ -85,7 +86,7 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 		return rv.(TypeInfo)
 	}
 	//
-	T_orig := T
+	origT := T
 	//
 	rv := TypeInfo{}
 	V := reflect.New(T)
@@ -119,7 +120,7 @@ func (me *type_info_cache_t) StatType(T reflect.Type) TypeInfo {
 	}
 	rv.Type, rv.Kind = T, K
 	//
-	me.cache.Store(T_orig, rv)
+	me.cache.Store(origT, rv)
 	//
 	return rv
 }
