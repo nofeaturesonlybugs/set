@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/nofeaturesonlybugs/set"
@@ -107,12 +108,33 @@ func TestValue_fields(t *testing.T) {
 	}
 }
 
+func TestValue_rebind(t *testing.T) {
+	chk := assert.New(t)
+	{
+		var a, b string
+		v := set.V(&a)
+		v.To("Hello")
+		v.Rebind(reflect.ValueOf(&b))
+		v.To("Goodbye")
+		chk.Equal("Hello", a)
+		chk.Equal("Goodbye", b)
+		v.Rebind(reflect.ValueOf(&a))
+		v.To("Hello x2")
+		chk.Equal("Hello x2", a)
+	}
+}
+
 func TestValue_set(t *testing.T) {
 	chk := assert.New(t)
 	//
 	{ // Only addressable values can be set; passing local variable fails.
 		var v bool
 		err := set.V(v).To(true)
+		chk.Error(err)
+	}
+	{ // Nil receiver
+		var v *set.Value
+		err := v.To("hi")
 		chk.Error(err)
 	}
 	{ // Only addressable values can be set; passing address-of local variable works.
@@ -163,6 +185,72 @@ func TestValue_set(t *testing.T) {
 		chk.NotNil(v)
 		chk.Equal(true, *v)
 		chk.Equal(o, v)
+	}
+}
+
+func TestValueToFast(t *testing.T) {
+	chk := assert.New(t)
+	var (
+		B   bool
+		I   int
+		I8  int8
+		I16 int16
+		I32 int32
+		I64 int64
+		U   uint
+		U8  uint8
+		U16 uint16
+		U32 uint32
+		U64 uint64
+		F32 float32
+		F64 float64
+		S   string
+	)
+	{
+		var err error
+		err = set.V(&B).To(true)
+		chk.NoError(err)
+		err = set.V(&I).To(int(-42))
+		chk.NoError(err)
+		err = set.V(&I8).To(int8(-8))
+		chk.NoError(err)
+		err = set.V(&I16).To(int16(-16))
+		chk.NoError(err)
+		err = set.V(&I32).To(int32(-32))
+		chk.NoError(err)
+		err = set.V(&I64).To(int64(-64))
+		chk.NoError(err)
+		err = set.V(&U).To(uint(42))
+		chk.NoError(err)
+		err = set.V(&U8).To(uint8(8))
+		chk.NoError(err)
+		err = set.V(&U16).To(uint16(16))
+		chk.NoError(err)
+		err = set.V(&U32).To(uint32(32))
+		chk.NoError(err)
+		err = set.V(&U64).To(uint64(64))
+		chk.NoError(err)
+		err = set.V(&F32).To(float32(3.14))
+		chk.NoError(err)
+		err = set.V(&F64).To(float64(6.28))
+		chk.NoError(err)
+		err = set.V(&S).To("string")
+		chk.NoError(err)
+		//
+		chk.Equal(true, B)
+		chk.Equal(-42, I)
+		chk.Equal(int8(-8), I8)
+		chk.Equal(int16(-16), I16)
+		chk.Equal(int32(-32), I32)
+		chk.Equal(int64(-64), I64)
+		chk.Equal(uint(42), U)
+		chk.Equal(uint8(8), U8)
+		chk.Equal(uint16(16), U16)
+		chk.Equal(uint32(32), U32)
+		chk.Equal(uint64(64), U64)
+		chk.Equal(float32(3.14), F32)
+		chk.Equal(float64(6.28), F64)
+		chk.Equal("string", S)
 	}
 }
 
@@ -1475,6 +1563,22 @@ func TestValue_appendCodeCoverageErrors(t *testing.T) {
 	{
 		var b []bool
 		err = set.V(b).Append(42)
+		chk.Error(err)
+	}
+	{ // If *Value is nil
+		var value *set.Value
+		err = value.Append(42)
+		chk.Error(err)
+	}
+}
+
+func TestValue_zeroCodeCoverageErrors(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var err error
+	{ // If *Value is nil
+		var value *set.Value
+		err = value.Zero()
 		chk.Error(err)
 	}
 }

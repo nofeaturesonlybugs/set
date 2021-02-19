@@ -11,9 +11,9 @@ func Writable(v reflect.Value) (V reflect.Value, CanWrite bool) {
 	}
 	T := v.Type()
 	K := T.Kind()
-	if T == nil || K == reflect.Invalid {
-		return
-	}
+	// if T == nil || K == reflect.Invalid { 	// N.B: Couldn't write a test case that hit this for 100% coverage
+	// 	return									// but I'm not entirely convinced I can take it out.
+	// }
 	V, T, K = v, v.Type(), v.Kind()
 	for K == reflect.Ptr {
 		if V.IsNil() && V.CanSet() {

@@ -464,9 +464,7 @@ func (me *Value) To(arg interface{}) error {
 	dataTypeInfo := TypeCache.StatType(dataValue.Type())
 	//
 	if me.IsSlice {
-		if err := me.Zero(); err != nil {
-			return errors.Go(err)
-		}
+		me.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
 		if !dataTypeInfo.IsSlice {
 			arg = []interface{}{arg}
 		}
