@@ -11,7 +11,7 @@ import (
 	"github.com/nofeaturesonlybugs/errors"
 )
 
-var mapper_TreatAsScalar = map[reflect.Type]struct{}{
+var mapperTreatAsScalar = map[reflect.Type]struct{}{
 	reflect.TypeOf(time.Time{}):  {},
 	reflect.TypeOf(&time.Time{}): {},
 }
@@ -84,6 +84,7 @@ type BoundMapping interface {
 	Set(field string, value interface{}) error
 }
 
+// DefaultMapper joins names by "_" but performs no other modifications.
 var DefaultMapper = &Mapper{
 	Join: "_",
 }
@@ -96,7 +97,7 @@ func (me *Mapper) Bind(I interface{}) BoundMapping {
 	} else {
 		v = V(I)
 	}
-	rv := new_bound_mapping_t(v, me.Map(v))
+	rv := newBoundMapping(v, me.Map(v))
 	return rv
 }
 
@@ -163,7 +164,7 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 				name = prefix
 			}
 			nameIndeces := append(indeces, k)
-			if _, ok := mapper_TreatAsScalar[fieldTypeInfo.Type]; ok {
+			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
 				rv.Indeces[name] = nameIndeces
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name)
@@ -225,16 +226,16 @@ func (me *Mapping) String() string {
 	return strings.Join(parts, "\n")
 }
 
-// bound_mapping_t is the implementation for BoundMapping.
-type bound_mapping_t struct {
+// boundMapping is the implementation for BoundMapping.
+type boundMapping struct {
 	value   *Value
 	mapping *Mapping
 	err     error
 }
 
-// new_bound_mapping_t creates a new bound_mapping_t type.
-func new_bound_mapping_t(value *Value, mapping *Mapping) *bound_mapping_t {
-	return &bound_mapping_t{
+// newBoundMapping creates a new bound_mapping_t type.
+func newBoundMapping(value *Value, mapping *Mapping) *boundMapping {
+	return &boundMapping{
 		value:   value,
 		mapping: mapping,
 	}
@@ -245,45 +246,47 @@ func new_bound_mapping_t(value *Value, mapping *Mapping) *bound_mapping_t {
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
-func (me *bound_mapping_t) Assignables(fields []string) ([]interface{}, error) {
+func (me *boundMapping) Assignables(fields []string) ([]interface{}, error) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
 	rv := []interface{}{}
 	for _, name := range fields {
-		if field, err := me.Field(name); err != nil {
+		var field *Value
+		var err error
+		if field, err = me.Field(name); err != nil {
 			return nil, errors.Errorf("%v while accessing field [%v]", err.Error(), name)
-		} else {
-			rv = append(rv, field.WriteValue.Addr().Interface())
 		}
+		rv = append(rv, field.WriteValue.Addr().Interface())
 	}
 	return rv, nil
 }
 
 // Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 // calls to Rebind()
-func (me *bound_mapping_t) Err() error {
+func (me *boundMapping) Err() error {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
 	return me.err
 }
 
 // Field returns the *Value for field.
-func (me *bound_mapping_t) Field(field string) (*Value, error) {
+func (me *boundMapping) Field(field string) (*Value, error) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	if v, err := me.value.FieldByIndex(me.mapping.Get(field)); err != nil {
+	var v reflect.Value
+	var err error
+	if v, err = me.value.FieldByIndex(me.mapping.Get(field)); err != nil {
 		return nil, errors.Go(err)
-	} else {
-		return V(v), nil
 	}
+	return V(v), nil
 }
 
 // Rebind will replace the currently bound value with the new variable I.
-func (me *bound_mapping_t) Rebind(I interface{}) {
+func (me *boundMapping) Rebind(I interface{}) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
 	me.err = nil
 	me.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
-func (me *bound_mapping_t) Set(field string, value interface{}) error {
+func (me *boundMapping) Set(field string, value interface{}) error {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
 	fieldValue, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
