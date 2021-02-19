@@ -19,8 +19,7 @@ func TestMapper(t *testing.T) {
 			B string
 		}
 		var data A
-		mapping, err := set.DefaultMapper.Map(&data)
-		chk.NoError(err)
+		mapping := set.DefaultMapper.Map(&data)
 		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 	}
@@ -54,8 +53,7 @@ func TestMapper(t *testing.T) {
 			Join:      "_",
 			Transform: strings.ToLower,
 		}
-		mapping, err := mapper.Map(&data)
-		chk.NoError(err)
+		mapping := mapper.Map(&data)
 		//
 		chk.Equal("[0 0 0]", fmt.Sprintf("%v", mapping.Get("child_pk")))
 		chk.Equal("[0 0 1]", fmt.Sprintf("%v", mapping.Get("child_created_tmz")))
@@ -99,8 +97,7 @@ func TestMapper_Bind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound, err := mapper.Bind(&data)
-		chk.NoError(err)
+		bound := mapper.Bind(&data)
 		chk.NotNil(bound)
 		//
 		field, err := bound.Field("Pk")
@@ -142,8 +139,7 @@ func TestMapper_Bind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound, err := mapper.Bind(&data)
-		chk.NoError(err)
+		bound := mapper.Bind(&data)
 		chk.NotNil(bound)
 		//
 		field, err := bound.Field("Pk")
@@ -190,24 +186,30 @@ func TestMapper_Bind_Rebind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound, err := mapper.Bind(&a)
-		chk.NoError(err)
+		bound := mapper.Bind(&a)
 		chk.NotNil(bound)
 		//
-		err = bound.Set("Pk", 10)
+		err := bound.Set("Pk", 10)
 		chk.NoError(err)
 		chk.Equal(10, a.Pk)
 		//
-		err = bound.Rebind(&b)
-		chk.NoError(err)
+		bound.Rebind(&b)
 		err = bound.Set("Pk", 20)
 		chk.NoError(err)
 		chk.Equal(20, b.Pk)
 		//
 		chk.NotEqual(a.Pk, b.Pk)
 		//
-		err = bound.Rebind(&other)
-		chk.Error(err)
+		var didPanic bool
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					didPanic = true
+				}
+			}()
+			bound.Rebind(&other)
+		}()
+		chk.Equal(true, didPanic)
 	}
 }
 
@@ -218,32 +220,20 @@ func TestMapperCodeCoverage(t *testing.T) {
 		_, ok := mapping.Lookup("Hi")
 		chk.Equal(false, ok)
 	}
-	{ // Tests case where receiver is nil when calling Mapper.Map or Mapper.Bind
-		var mapper *set.Mapper
-		mapping, err := mapper.Map(struct{}{})
-		chk.Error(err)
-		chk.Nil(mapping)
-		bound, err := mapper.Bind(struct{}{})
-		chk.Error(err)
-		chk.Nil(bound)
-	}
 	{ // Tests case when type T is already scanned and uses Mapper.known
 		type T struct {
 			A string
 		}
-		mapping, err := set.DefaultMapper.Map(T{})
-		chk.NoError(err)
+		mapping := set.DefaultMapper.Map(T{})
 		chk.NotNil(mapping)
-		mapping, err = set.DefaultMapper.Map(T{})
-		chk.NoError(err)
+		mapping = set.DefaultMapper.Map(T{})
 		chk.NotNil(mapping)
 	}
 	{ // Tests case when type T is already wrapped in *set.Value when calling Mapper.Map
 		type T struct {
 			A string
 		}
-		mapping, err := set.DefaultMapper.Map(set.V(T{}))
-		chk.NoError(err)
+		mapping := set.DefaultMapper.Map(set.V(T{}))
 		chk.NotNil(mapping)
 	}
 	{ // Tests Mapper.Copy
@@ -251,11 +241,9 @@ func TestMapperCodeCoverage(t *testing.T) {
 			A string
 			B string
 		}
-		m1, err := set.DefaultMapper.Map(T{})
-		chk.NoError(err)
+		m1 := set.DefaultMapper.Map(T{})
 		chk.NotNil(m1)
-		m2, err := m1.Copy()
-		chk.NoError(err)
+		m2 := m1.Copy()
 		chk.NotNil(m2)
 		chk.Equal(len(m1.Indeces), len(m2.Indeces))
 		m2.Indeces["A"] = nil
@@ -263,19 +251,11 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.NotEqual(len(m1.Indeces["A"]), len(m2.Indeces["A"]))
 		chk.NotEqual(len(m1.Indeces["B"]), len(m2.Indeces["B"]))
 	}
-	{ // Tests Mapping.Copy when Mapping is nil
-		var m1 *set.Mapping
-		m2, err := m1.Copy()
-		chk.Error(err)
-		chk.Nil(m1)
-		chk.Nil(m2)
-	}
 	{ // Tests BoundMapping when value V is not a struct.
 		var b bool
-		bound, err := set.DefaultMapper.Bind(&b)
-		chk.NoError(err)
+		bound := set.DefaultMapper.Bind(&b)
 		chk.NotNil(bound)
-		err = bound.Set("Huh", false)
+		err := bound.Set("Huh", false)
 		chk.Error(err)
 	}
 	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapping.Rebind when value is already a *set.Value
@@ -284,20 +264,17 @@ func TestMapperCodeCoverage(t *testing.T) {
 		}
 		var t, u T
 		vt, vu := set.V(&t), set.V(&u)
-		bound, err := set.DefaultMapper.Bind(vt)
-		chk.NoError(err)
+		bound := set.DefaultMapper.Bind(vt)
 		chk.NotNil(bound)
-		err = bound.Rebind(vu)
-		chk.NoError(err)
+		bound.Rebind(vu)
 	}
 	{ // Tests BoundMapping.Set when the underlying set can not be performed.
 		type A struct {
 			I int
 		}
-		bound, err := set.DefaultMapper.Bind(&A{})
-		chk.NoError(err)
+		bound := set.DefaultMapper.Bind(&A{})
 		chk.NotNil(bound)
-		err = bound.Set("I", "Hello, World!")
+		err := bound.Set("I", "Hello, World!")
 		chk.Error(err)
 	}
 	{ // Tests Mapper.Map for structs inherently treated as scalars, such as time.Time and *time.Time
@@ -305,8 +282,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 			Time  time.Time
 			PTime *time.Time
 		}
-		mapping, err := set.DefaultMapper.Map(&T{})
-		chk.NoError(err)
+		mapping := set.DefaultMapper.Map(&T{})
 		chk.NotNil(mapping)
 		//
 		field, ok := mapping.Lookup("Time")
@@ -323,8 +299,7 @@ func TestMapperCodeCoverage(t *testing.T) {
 		}
 		data := []A{{}, {}}
 		for k := 0; k < len(data); k++ {
-			bound, err := set.DefaultMapper.Bind(&data[k])
-			chk.NoError(err)
+			bound := set.DefaultMapper.Bind(&data[k])
 			chk.NotNil(bound)
 			assignables, err := bound.Assignables([]string{"B", "A"})
 			chk.NoError(err)
@@ -360,7 +335,7 @@ func ExampleMapper() {
 			Elevated: set.NewTypeList(CommonDb{}),
 			Join:     "_",
 		}
-		mapping, _ := mapper.Map(&data)
+		mapping := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
@@ -370,7 +345,7 @@ func ExampleMapper() {
 			Join:      ".",
 			Transform: strings.ToLower,
 		}
-		mapping, _ := mapper.Map(&data)
+		mapping := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 	{
@@ -380,7 +355,7 @@ func ExampleMapper() {
 			Join: "_",
 			Tags: []string{"t"},
 		}
-		mapping, _ := mapper.Map(&data)
+		mapping := mapper.Map(&data)
 		fmt.Println(strings.Replace(mapping.String(), "\t\t", " ", -1))
 	}
 
@@ -426,28 +401,23 @@ func ExampleMapper_Bind() {
 	mapper := &set.Mapper{
 		Elevated: set.NewTypeList(CommonDb{}),
 	}
-	bound, err := mapper.Bind(&data[0])
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+	bound := mapper.Bind(&data[0])
 	bound.Set("Pk", 10)
 	bound.Set("CreatedTime", "-5h")
 	bound.Set("UpdatedTime", "-2h")
 	bound.Set("Name", "Bob")
 	bound.Set("Age", 30)
-	if err = bound.Err(); err != nil {
+	if err := bound.Err(); err != nil {
 		fmt.Println(err.Error())
 	}
 	//
-	if err = bound.Rebind(&data[1]); err != nil {
-		fmt.Println(err.Error())
-	}
+	bound.Rebind(&data[1])
 	bound.Set("Pk", 20)
 	bound.Set("CreatedTime", "-15h")
 	bound.Set("UpdatedTime", "-12h")
 	bound.Set("Name", "Sally")
 	bound.Set("Age", 20)
-	if err = bound.Err(); err != nil {
+	if err := bound.Err(); err != nil {
 		fmt.Println(err.Error())
 	}
 	//
@@ -459,4 +429,36 @@ func ExampleMapper_Bind() {
 	// Person: pk=10 created=-5h updated=-2h name=Bob age=30
 	// Person: pk=20 created=-15h updated=-12h name=Sally age=20
 
+}
+
+func ExampleBoundMapping() {
+	type Person struct {
+		First string
+		Last  string
+	}
+	values := []map[string]string{
+		{"first": "Bob", "last": "Smith"},
+		{"first": "Sally", "last": "Smith"},
+	}
+	mapper := &set.Mapper{
+		Transform: strings.ToLower,
+	}
+	var people []Person
+	bound := mapper.Bind(&Person{})
+	for _, m := range values {
+		person := Person{}
+		bound.Rebind(&person)
+		for fieldName, fieldValue := range m {
+			bound.Set(fieldName, fieldValue)
+		}
+		if err := bound.Err(); err != nil {
+			fmt.Println(err.Error())
+		}
+		people = append(people, person)
+	}
+	fmt.Println(people[0].First, people[0].Last)
+	fmt.Println(people[1].First, people[1].Last)
+
+	// Output: Bob Smith
+	// Sally Smith
 }

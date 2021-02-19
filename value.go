@@ -323,9 +323,7 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 //	v := set.V( T{} ) // Create a single *Value for the type T
 //	// populate slice
 //	for _, item := range slice {
-//		if err := v.Rebind( item ); err != nil { // Reuse the existing *Value -- will be faster!
-//			// Handle error
-//		}
+//		v.Rebind( item ) // Reuse the existing *Value -- will be faster!
 //		// manipulate v in order to affect item
 //	}
 //

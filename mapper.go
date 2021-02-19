@@ -20,15 +20,18 @@ var mapper_TreatAsScalar = map[reflect.Type]struct{}{
 //	Key is a string key representing a common or friendly name for the nested struct member.
 //	Indeces is an []int that can be used to index to the proper struct member.
 type Mapping struct {
-	Indeces   map[string][]int
-	CacheInfo map[string]struct {
-		Indeces  []int
-		SharedId int
-	}
+	Indeces map[string][]int
+	// CacheInfo map[string]struct {
+	// 	Indeces  []int
+	// 	SharedId int
+	// }
 }
 
 // Mapper is used to traverse structures to create Mappings and then navigate the nested
 // structure using string keys.
+//
+// Instantiate mappers as pointers:
+//	myMapper := &set.Mapper{}
 type Mapper struct {
 	// If the types you wish to map contain embedded structs or interfaces you do not
 	// want to map to string names include those types in the Ignored member.
@@ -74,9 +77,9 @@ type BoundMapping interface {
 	Err() error
 	// Field returns the *Value for field.
 	Field(field string) (*Value, error)
-	// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
-	// not the same then an error is returned.
-	Rebind(I interface{}) error
+	// Rebind will replace the currently bound value with the new variable I.  If the underlying types do
+	// not match a panic will occur.
+	Rebind(I interface{})
 	// Set effectively sets V[field] = value.
 	Set(field string, value interface{}) error
 }
@@ -86,20 +89,15 @@ var DefaultMapper = &Mapper{
 }
 
 // Bind creates a Mapping bound to a specific instance I of a variable.
-func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
+func (me *Mapper) Bind(I interface{}) BoundMapping {
 	var v *Value
 	if tv, ok := I.(*Value); ok {
 		v = tv
 	} else {
 		v = V(I)
 	}
-	mapping, err := me.Map(v) // It's this call to Map() that performs the nil receiver check.
-	if err != nil {
-		return nil, errors.Go(err)
-	}
-	rv := new_bound_mapping_t(v, mapping)
-	return rv, nil
-
+	rv := new_bound_mapping_t(v, me.Map(v))
+	return rv
 }
 
 // Map adds T to the Mapper's list of known and recognized types.
@@ -113,10 +111,7 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 //
 // Mappings that are returned are shared resources and should not be altered in any way.  If this is your
 // use-case then create a copy of the Mapping with Mapping.Copy.
-func (me *Mapper) Map(T interface{}) (*Mapping, error) {
-	if me == nil {
-		return nil, errors.NilReceiver()
-	}
+func (me *Mapper) Map(T interface{}) *Mapping {
 	var typeInfo TypeInfo
 	switch tt := T.(type) {
 	case *Value:
@@ -128,15 +123,15 @@ func (me *Mapper) Map(T interface{}) (*Mapping, error) {
 	}
 	//
 	if rv, ok := me.known.Load(typeInfo.Type); ok {
-		return rv.(*Mapping), nil
+		return rv.(*Mapping)
 	}
 	//
 	rv := &Mapping{
 		Indeces: map[string][]int{},
-		CacheInfo: map[string]struct {
-			Indeces  []int
-			SharedId int
-		}{},
+		// CacheInfo: map[string]struct { // TODO
+		// 	Indeces  []int
+		// 	SharedId int
+		// }{},
 	}
 	//
 	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
@@ -181,25 +176,23 @@ func (me *Mapper) Map(T interface{}) (*Mapping, error) {
 	scan(typeInfo, []int{}, "")
 	me.known.Store(typeInfo.Type, rv)
 	//
-	return rv, nil
+	return rv
 }
 
 // Copy creates a copy of the Mapping.
-func (me *Mapping) Copy() (*Mapping, error) {
-	if me == nil {
-		return nil, errors.NilReceiver()
-	}
+func (me *Mapping) Copy() *Mapping {
 	rv := &Mapping{
 		Indeces: map[string][]int{},
-		CacheInfo: map[string]struct {
-			Indeces  []int
-			SharedId int
-		}{},
+		// CacheInfo: map[string]struct { // TODO
+		// 	Indeces  []int
+		// 	SharedId int
+		// }{},
 	}
 	for k, v := range me.Indeces {
 		rv.Indeces[k] = append([]int{}, v...)
+		// TODO Copy CacheInfo as well.
 	}
-	return rv, nil
+	return rv
 }
 
 // Get returns the indeces associated with key in the mapping.  If no such key

@@ -1883,17 +1883,12 @@ func BenchmarkMapperBoundMapping(b *testing.B) {
 	}
 	//
 	dest := new(T)
-	bound, err := mapper.Bind(&dest)
-	if err != nil {
-		b.Fatalf("Unable to bind: %v", err.Error())
-	}
+	bound := mapper.Bind(&dest)
 	//
 	for k := 0; k < b.N; k++ {
 		row := rows[k%size]
 		dest = new(T)
-		if err = bound.Rebind(&dest); err != nil {
-			b.Fatalf("Unable to Rebind: %v", err.Error())
-		}
+		bound.Rebind(&dest)
 		//
 		bound.Set("Id", row.Id)
 		bound.Set("CreatedTime", row.CreatedTime)
@@ -1913,7 +1908,7 @@ func BenchmarkMapperBoundMapping(b *testing.B) {
 		bound.Set("Vendor_Contact_First", row.VendorContactFirst)
 		bound.Set("Vendor_Contact_Last", row.VendorContactLast)
 		//
-		if err = bound.Err(); err != nil {
+		if err := bound.Err(); err != nil {
 			b.Fatalf("Unable to set: %v", err.Error())
 		}
 	}

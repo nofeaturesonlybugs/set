@@ -435,10 +435,7 @@ mapper := &set.Mapper{
 //
 dest := new(T)
 // bound will become our BoundMapping and the accessor into instances of T
-bound, err := mapper.Bind(&dest) 
-if err != nil {
-    b.Fatalf("Unable to bind: %v", err.Error())
-}
+bound := mapper.Bind(&dest) 
 ```
 Now you can iterate a dataset and populate instances of `T`:
 ```go
@@ -449,9 +446,7 @@ for k := 0; k < b.N; k++ {
     // Create a new T
     dest = new(T)
     // Change our binding to the new T
-    if err = bound.Rebind(&dest); err != nil {
-        b.Fatalf("Unable to Rebind: %v", err.Error())
-    }
+    bound.Rebind(&dest)
     //
     bound.Set("Id", row.Id)
     bound.Set("CreatedTime", row.CreatedTime)

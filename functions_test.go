@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -50,4 +51,28 @@ func TestWritable(t *testing.T) {
 		chk.Equal(true, b)
 		chk.Equal(true, *bp)
 	}
+}
+
+func ExampleWritable() {
+	var value, writable reflect.Value
+	var ok bool
+	var s string
+	var sp *string
+
+	value = reflect.ValueOf(s)
+	writable, ok = set.Writable(value)
+	fmt.Printf("ok= %v\n", ok)
+
+	value = reflect.ValueOf(sp)
+	writable, ok = set.Writable(value)
+	fmt.Printf("ok= %v\n", ok)
+
+	value = reflect.ValueOf(&sp)
+	writable, ok = set.Writable(value)
+	writable.SetString("Hello")
+	fmt.Printf("ok= %v sp= %v\n", ok, *sp)
+
+	// Output: ok= false
+	// ok= false
+	// ok= true sp= Hello
 }

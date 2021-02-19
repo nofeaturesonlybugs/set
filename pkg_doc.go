@@ -284,9 +284,7 @@
 // to:
 //	v := set.Value( &T{} ) // Create v once!
 //	for _, value := range someSliceOfTypeT {
-//		if err := v.Rebind( &value )	{ // <-- Reuses existing type information -- more performant!
-//			// handle error
-//		}
+//		v.Rebind( &value ) // <-- Reuses existing type information -- more performant!
 //		// do something with v
 //	}
 //
