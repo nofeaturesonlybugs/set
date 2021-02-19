@@ -30,8 +30,6 @@ func TestTypeInfo(t *testing.T) {
 		var sl []struct{}
 		var slp *[]struct{}
 		var slpp *[]struct{}
-		//
-		var info set.TypeInfo
 		size := 5
 		ch := make(chan struct{})
 		signals := []chan struct{}{}
@@ -39,6 +37,8 @@ func TestTypeInfo(t *testing.T) {
 		for k := 0; k < size; k++ {
 			signals = append(signals, make(chan struct{}))
 			go func(idx int) {
+				//
+				var info set.TypeInfo
 				<-ch
 				//
 				info = set.TypeCache.Stat(nil)
