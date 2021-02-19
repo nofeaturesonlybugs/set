@@ -113,9 +113,9 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 //
 // Mappings that are returned are shared resources and should not be altered in any way.  If this is your
 // use-case then create a copy of the Mapping with Mapping.Copy.
-func (me *Mapper) Map(T interface{}) (Mapping, error) {
+func (me *Mapper) Map(T interface{}) (*Mapping, error) {
 	if me == nil {
-		return Mapping{}, errors.NilReceiver()
+		return nil, errors.NilReceiver()
 	}
 	var typeInfo TypeInfo
 	switch tt := T.(type) {
@@ -128,17 +128,16 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 	}
 	//
 	if rv, ok := me.known.Load(typeInfo.Type); ok {
-		return rv.(Mapping), nil
+		return rv.(*Mapping), nil
 	}
 	//
-	rv := Mapping{
+	rv := &Mapping{
 		Indeces: map[string][]int{},
 		CacheInfo: map[string]struct {
 			Indeces  []int
 			SharedId int
 		}{},
 	}
-	// rv := make(Mapping) // TODO RM
 	//
 	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
 	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
@@ -186,36 +185,34 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 }
 
 // Copy creates a copy of the Mapping.
-func (me Mapping) Copy() Mapping {
-	rv := Mapping{}
-	// if me.Indeces == nil { // TODO RM
-	// 	return rv // TODO RM
-	// } // TODO RM
-	// rv := make(Mapping)// TODO RM
-	if me.Indeces != nil {
-		rv.Indeces = map[string][]int{}
-		rv.CacheInfo = map[string]struct {
+func (me *Mapping) Copy() (*Mapping, error) {
+	if me == nil {
+		return nil, errors.NilReceiver()
+	}
+	rv := &Mapping{
+		Indeces: map[string][]int{},
+		CacheInfo: map[string]struct {
 			Indeces  []int
 			SharedId int
-		}{}
-		for k, v := range me.Indeces { // TODO Can range a nil map so we can make changes here.
-			rv.Indeces[k] = append([]int{}, v...)
-		}
+		}{},
 	}
-	return rv
+	for k, v := range me.Indeces {
+		rv.Indeces[k] = append([]int{}, v...)
+	}
+	return rv, nil
 }
 
 // Get returns the indeces associated with key in the mapping.  If no such key
 // is found a nil slice is returned.
-func (me Mapping) Get(key string) []int {
+func (me *Mapping) Get(key string) []int {
 	v, _ := me.Lookup(key)
 	return v
 }
 
 // Lookup returns the value associated with key in the mapping.  If no such key is
 // found a nil slice is returned and ok is false; otherwise ok is true.
-func (me Mapping) Lookup(key string) (indeces []int, ok bool) {
-	if me.Indeces == nil {
+func (me *Mapping) Lookup(key string) (indeces []int, ok bool) {
+	if me == nil || me.Indeces == nil {
 		return nil, false
 	}
 	indeces, ok = me.Indeces[key]
@@ -223,7 +220,10 @@ func (me Mapping) Lookup(key string) (indeces []int, ok bool) {
 }
 
 // String returns the Mapping as a string value.
-func (me Mapping) String() string {
+func (me *Mapping) String() string {
+	if me == nil {
+		return ""
+	}
 	parts := []string{}
 	for str, indeces := range me.Indeces {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
@@ -235,12 +235,12 @@ func (me Mapping) String() string {
 // bound_mapping_t is the implementation for BoundMapping.
 type bound_mapping_t struct {
 	value   *Value
-	mapping Mapping
+	mapping *Mapping
 	err     error
 }
 
 // new_bound_mapping_t creates a new bound_mapping_t type.
-func new_bound_mapping_t(value *Value, mapping Mapping) *bound_mapping_t {
+func new_bound_mapping_t(value *Value, mapping *Mapping) *bound_mapping_t {
 	return &bound_mapping_t{
 		value:   value,
 		mapping: mapping,
