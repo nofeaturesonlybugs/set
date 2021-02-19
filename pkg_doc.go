@@ -1,5 +1,5 @@
-// Package set is a small wrapper around the official reflect package that facilitates loose type conversion and assignment
-// into native Go types.
+// Package set is a small wrapper around the official reflect package that facilitates loose type conversion,
+// assignment into native Go types, and utilities to populate deeply nested Go structs.
 //
 // Data Types
 //
@@ -32,7 +32,7 @@
 //		will "github.com/nofeaturesonlybugs/set"
 //	)
 //
-// Package Info
+// Basic Type Coercion
 //
 // A simple example with type coercion:
 // 	b, i := true, 42
@@ -127,12 +127,12 @@
 //	var t []bool
 //	var s []interface{}
 //	s = []interface{}{ "true", 0, float64(1) }
-//	set.V(&t).To(s) // b is []bool{ true, false, true }
+//	set.V(&t).To(s) // t is []bool{ true, false, true }
 //
 //	var t []bool
 //	var s []bool
 //	s = []bool{ true, false, true }
-//	set.V(&t).To(s) // b is []bool{ true, false, true } and t != s
+//	set.V(&t).To(s) // t is []bool{ true, false, true } and t != s
 //
 // If a single element within []S can not be coerced into an element of T then []T will be empty:
 //	var t []int
@@ -141,7 +141,7 @@
 //	set.V(&t).To(s) // t is []int{} because "Hello" can not coerce.
 //
 //
-// Populating Structs
+// Populating Structs with Value.Fill() and a Getter
 //
 // Structs can be populated by using Value.Fill() and a Getter; note the function is type casted to
 // a set.GetterFunc.
@@ -174,7 +174,7 @@
 // 	var t T
 // 	set.V(&t).FillByTag("key", myGetter)
 //
-// Populating Nested Structs
+// Populating Nested Structs with Value.Fill() and a Getter
 //
 // To populate nested structs a Getter needs to return a Getter for the given name:
 // 	myGetter := set.GetterFunc(func(key string) interface{} {
@@ -254,6 +254,39 @@
 // 	}
 // 	var t Person
 // 	set.V(&t).FillByTag("key", myGetter)
+//
+// Populating Structs with Mapper, Mapping, and BoundMap
+//
+// If you need to populate or traverse structs using strings as lookups consider using a Mapper.  A Mapper traverses a type T
+// and generates a Mapping which contains members to facilitate accessing struct field indeces with strings.
+//
+// When you index into Mapping.Indeces you will receive a slice of ints representing the indeces into the nested structure
+// to the desired field.
+//
+// For convenience a Mapper can create a BoundMapping which binds the Mapping to an instance of T.  The BoundMapping
+// can then be used to update the data within the instance.  See the BoundMapping examples.
+//
+// Rebinding
+//
+// Both Value and BoundMapping support Rebind().  There is an amount of overhead instantiating either
+// Value or BoundMapping and most of that overhead occurs with type introspection via reflect.  In tight-loop situations
+// where either *Value or BoundMapping are used to alter many values of the same type this overhead
+// can be costly and is unnecessary since the first *Value or BoundMapping already contains the type information.
+//
+// For optimal performance in tight loop situations create a single instance of *Value or BoundMapping and then
+// call Rebind() with a new instance of data you wish to manipulate.
+//
+// For example change:
+//	for _, value := range someSliceOfTypeT {
+//		v := set.V( &value )			// <-- Expensive -- type information gathered for each instance created.
+//		// do something with v
+//	}
+// to:
+//	v := set.Value( &T{} ) // Create v once!
+//	for _, value := range someSliceOfTypeT {
+//		v.Rebind( &value ) // <-- Reuses existing type information -- more performant!
+//		// do something with v
+//	}
 //
 // Examples Subdirectory
 //

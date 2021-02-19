@@ -1,4 +1,7 @@
 /develop
+    + Add Mapper, Mapping, BoundMapping
+    + Add TypeInfo, TypeInfoCache
+    + Add global TypeCache as an instance of TypeInfoCache.
 
 0.1.2
     + Clean golint warnings; some small refactoring.
