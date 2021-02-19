@@ -8,64 +8,6 @@ Package `set` is a small wrapper around the official reflect package that facili
 
 Read the `godoc` for more detailed explanations and examples but here are some enticing snippets.
 
-## Mapper and Mapping for Nested Struct Access
-`Mapper` traverses a nested struct hierarchy to generate a `Mapping`.  From a `Mapping` you can use `string` keys to
-access the struct members by `struct field index`.
-```go
-type CommonDb struct {
-    Pk          int    `t:"pk"`
-    CreatedTime string `t:"created_time"`
-    UpdatedTime string `t:"updated_time"`
-}
-type Person struct {
-    CommonDb `t:"common"`
-    Name     string `t:"name"`
-    Age      int    `t:"age"`
-}
-var data Person
-```
-Depending on the `Mapper` options the following mappings can be created:
-```go
-// Type CommonDb doesn't affect names; join nestings with "_"
-mapper := &set.Mapper{
-    Elevated: set.NewTypeList(CommonDb{}),
-    Join:     "_",
-}
-generates = `
-[0 0] Pk
-[0 1] CreatedTime
-[0 2] UpdatedTime
-[1] Name
-[2] Age
-`
-
-// lowercase with dot separators
-mapper := &set.Mapper{
-    Join:      ".",
-    Transform: strings.ToLower,
-}
-generates = `
-[0 0] commondb.pk
-[0 1] commondb.createdtime
-[0 2] commondb.updatedtime
-[1] name
-[2] age
-`
-
-// specify tags
-mapper := &set.Mapper{
-    Join: "_",
-    Tags: []string{"t"},
-}
-generates = `
-[0 0] common_pk
-[0 1] common_created_time
-[0 2] common_updated_time
-[1] name
-[2] age
-`
-```
-
 ## Scalars and Type-Coercion
 ```go
 {
@@ -116,14 +58,14 @@ generates = `
     var t []bool
     var s []interface{}
     s = []interface{}{ "true", 0, float64(1) }
-    set.V(&t).To(s) // b is []bool{ true, false, true }
+    set.V(&t).To(s) // t is []bool{ true, false, true }
 }
 
 {
     var t []bool
     var s []bool
     s = []bool{ true, false, true }
-    set.V(&t).To(s) // b is []bool{ true, false, true } and t != s
+    set.V(&t).To(s) // t is []bool{ true, false, true } and t != s
 }
 ```
 
@@ -362,5 +304,170 @@ func TestValue_fillNestedStructPointerToSlicesAsPointers(t *testing.T) {
     chk.Equal("Slice City", (*t.Slice)[0].Address.City)
     chk.Equal("SL", (*t.Slice)[0].Address.State)
     chk.Equal("99999", (*t.Slice)[0].Address.Zip)
+}
+```
+## Value.FieldByIndex() and Value.FieldByIndexAsValue()
+
+Similarly to the standard `reflect` package `Value` also supports accessing `struct` types by field indeces.  Unlike the standard `reflect` package this package will instantiate and create `nil` members as it traverses the `struct`.
+```go
+type A struct {
+	B struct {
+		C *struct {
+			CString string
+		}
+		BString string
+	}
+}
+var a A
+var v, f reflect.Value
+v = reflect.Indirect(reflect.ValueOf(&a))
+f = v.FieldByIndex([]int{0, 1})     // Accesses a.B.BString -- Ok because B is not nil.
+f = v.FieldByIndex([]int{0, 0, 0})  // Accesses a.B.C.CString -- panic because C is nil.
+
+// However with set.Value.FieldByIndex()
+f := set.V(&a).FieldByIndex([]int{0, 0, 0}) // Creates C and returns reflect.Value for CString.
+
+// FieldByIndex() returns the field as a reflect.Value but you can also return it as a *set.Value:
+asValue := set.V(&a).FieldByIndexAsValue([]int{0, 0, 0})
+```
+
+## Mapper and Mapping for Nested Struct Access
+`Mapper` traverses a nested struct hierarchy to generate a `Mapping`.  From a `Mapping` you can use `string` keys to access the struct members by `struct field index`.
+```go
+type CommonDb struct {
+    Pk          int    `t:"pk"`
+    CreatedTime string `t:"created_time"`
+    UpdatedTime string `t:"updated_time"`
+}
+type Person struct {
+    CommonDb `t:"common"`
+    Name     string `t:"name"`
+    Age      int    `t:"age"`
+}
+var data Person
+```
+Depending on the public `Mapper` members (aka options) the following mappings can be created:
+```go
+// Type CommonDb doesn't affect names; join nestings with "_"
+mapper := &set.Mapper{
+    Elevated: set.NewTypeList(CommonDb{}),
+    Join:     "_",
+}
+generates = `
+[0 0] Pk
+[0 1] CreatedTime
+[0 2] UpdatedTime
+[1] Name
+[2] Age
+`
+
+// lowercase with dot separators
+// This time CommonDb is not elevated and becomes part of the generated names.
+mapper := &set.Mapper{
+    Join:      ".",
+    Transform: strings.ToLower,
+}
+generates = `
+[0 0] commondb.pk
+[0 1] commondb.createdtime
+[0 2] commondb.updatedtime
+[1] name
+[2] age
+`
+
+// specify tags
+// CommonDb not elevated again, tags are used to generate names.
+mapper := &set.Mapper{
+    Join: "_",
+    Tags: []string{"t"},
+}
+generates = `
+[0 0] common_pk
+[0 1] common_created_time
+[0 2] common_updated_time
+[1] name
+[2] age
+`
+```
+
+## BoundMappings combine Mapper.Map() and Value.FieldByIndex()
+
+`Mapper.Bind()` will return a `BoundMapping` that you can use to set nested struct members on a variable via strings.  You can `Rebind()` a `BoundMapping` to switch the underlying value.  Consider the following struct hierarchy:
+```go
+type Common struct {
+    Id int
+}
+type Timestamps struct {
+    CreatedTime  string
+    ModifiedTime string
+}
+type Person struct {
+    Common
+    Timestamps // Not used but present anyways
+    First      string
+    Last       string
+}
+type Vendor struct {
+    Common
+    Timestamps  // Not used but present anyways
+    Name        string
+    Description string
+    Contact     Person
+}
+type T struct {
+    Common
+    Timestamps
+    //
+    Price    int
+    Quantity int
+    Total    int
+    //
+    Customer Person
+    Vendor   Vendor
+}
+```
+Create a `set.Mapper` with your desired options and create a binding:
+```go
+mapper := &set.Mapper{
+    Elevated: set.NewTypeList(Common{}, Timestamps{}),
+    Join:     "_",
+}
+//
+dest := new(T)
+// bound will become our BoundMapping and the accessor into instances of T
+bound := mapper.Bind(&dest) 
+```
+Now you can iterate a dataset and populate instances of `T`:
+```go
+for k := 0; k < b.N; k++ {
+    // `rows` is a big pile of randomized data.  We are assigning data from `row` into our new T
+    // but using strings to access into the nested structure of T.
+    row := rows[k%size]
+    // Create a new T
+    dest = new(T)
+    // Change our binding to the new T
+    bound.Rebind(&dest)
+    //
+    bound.Set("Id", row.Id)
+    bound.Set("CreatedTime", row.CreatedTime)
+    bound.Set("ModifiedTime", row.ModifiedTime)
+    bound.Set("Price", row.Price)
+    bound.Set("Quantity", row.Quantity)
+    bound.Set("Total", row.Total)
+    //
+    bound.Set("Customer_Id", row.CustomerId)
+    bound.Set("Customer_First", row.CustomerFirst)
+    bound.Set("Customer_Last", row.CustomerLast)
+    //
+    bound.Set("Vendor_Id", row.VendorId)
+    bound.Set("Vendor_Name", row.VendorName)
+    bound.Set("Vendor_Description", row.VendorDescription)
+    bound.Set("Vendor_Contact_Id", row.VendorContactId)
+    bound.Set("Vendor_Contact_First", row.VendorContactFirst)
+    bound.Set("Vendor_Contact_Last", row.VendorContactLast)
+    //
+    if err = bound.Err(); err != nil {
+        b.Fatalf("Unable to set: %v", err.Error())
+    }
 }
 ```

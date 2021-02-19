@@ -19,17 +19,30 @@ var mapper_TreatAsScalar = map[reflect.Type]struct{}{
 // Mapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
 //	Key is a string key representing a common or friendly name for the nested struct member.
 //	Indeces is an []int that can be used to index to the proper struct member.
-type Mapping map[string][]int
+type Mapping struct {
+	Indeces map[string][]int
+	// CacheInfo map[string]struct { // TODO
+	// 	Indeces  []int
+	// 	SharedId int
+	// }
+}
 
 // Mapper is used to traverse structures to create Mappings and then navigate the nested
 // structure using string keys.
+//
+// Instantiate mappers as pointers:
+//	myMapper := &set.Mapper{}
 type Mapper struct {
-	// A slice of type instances that should be ignored during name generation.
+	// If the types you wish to map contain embedded structs or interfaces you do not
+	// want to map to string names include those types in the Ignored member.
+	//
+	// See also NewTypeList().
 	Ignored TypeList
 	//
-	// During name generation types in the `Elevated` member will not have the name affected
-	// by the struct field name or data type.  Use this for struct members or embedded structs
-	// when you do not want their name or type affecting the generated name.
+	// Struct fields that are also structs or embedded structs will have their name
+	// as part of the generated name unless it is included in the Elevated member.
+	//
+	// See also NewTypeList().
 	Elevated TypeList
 	//
 	// A list of struct tags that will be used for name generation in order of preference.
@@ -48,8 +61,10 @@ type Mapper struct {
 	Transform func(string) string
 
 	//
-	mut   sync.RWMutex
-	known map[reflect.Type]Mapping // Types that are known -- i.e. we've already created the mapping.
+	// Performance note:
+	//	Initially known was map[reflect.Type]Mapping and required a sync.RWMutex to protect access.
+	//	Similarly to the change in type_info_cache_t we changing both in favor of the sync.Map.
+	known sync.Map
 }
 
 // BoundMapping binds a Mapping to a specific variable instance V.
@@ -62,9 +77,9 @@ type BoundMapping interface {
 	Err() error
 	// Field returns the *Value for field.
 	Field(field string) (*Value, error)
-	// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
-	// not the same then an error is returned.
-	Rebind(I interface{}) error
+	// Rebind will replace the currently bound value with the new variable I.  If the underlying types do
+	// not match a panic will occur.
+	Rebind(I interface{})
 	// Set effectively sets V[field] = value.
 	Set(field string, value interface{}) error
 }
@@ -74,22 +89,15 @@ var DefaultMapper = &Mapper{
 }
 
 // Bind creates a Mapping bound to a specific instance I of a variable.
-func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
+func (me *Mapper) Bind(I interface{}) BoundMapping {
 	var v *Value
 	if tv, ok := I.(*Value); ok {
 		v = tv
 	} else {
 		v = V(I)
 	}
-	mapping, err := me.Map(v) // It's this call to Map() that performs the nil receiver check.
-	if err != nil {
-		return nil, errors.Go(err)
-	}
-	rv := &bound_mapping_t{
-		value:   v,
-		mapping: mapping,
-	}
-	return rv, nil
+	rv := new_bound_mapping_t(v, me.Map(v))
+	return rv
 }
 
 // Map adds T to the Mapper's list of known and recognized types.
@@ -101,43 +109,47 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 // If you depend on Map returning the same instance of Mapping for a type T every time it is called then
 // you should call it once for each possible type T synchronously before using the Mapper in your goroutines.
 //
-// Mappings that are returned should not be written to or altered in any way.  If this is your use-case then
-// create a copy of the Mapping with Mapping.Copy.
-func (me *Mapper) Map(T interface{}) (Mapping, error) {
-	if me == nil {
-		return nil, errors.NilReceiver()
-	}
-	var v *Value
-	if tv, ok := T.(*Value); ok {
-		v = tv
-	} else {
-		v = V(T)
+// Mappings that are returned are shared resources and should not be altered in any way.  If this is your
+// use-case then create a copy of the Mapping with Mapping.Copy.
+func (me *Mapper) Map(T interface{}) *Mapping {
+	var typeInfo TypeInfo
+	switch tt := T.(type) {
+	case *Value:
+		typeInfo = tt.TypeInfo
+	case reflect.Type:
+		typeInfo = TypeCache.StatType(tt)
+	default:
+		typeInfo = TypeCache.Stat(T)
 	}
 	//
-	me.mut.RLock()
-	if rv, ok := me.known[v.pt]; ok {
-		me.mut.RUnlock()
-		return rv, nil
+	if rv, ok := me.known.Load(typeInfo.Type); ok {
+		return rv.(*Mapping)
 	}
-	me.mut.RUnlock()
 	//
-	rv := make(Mapping)
+	rv := &Mapping{
+		Indeces: map[string][]int{},
+		// CacheInfo: map[string]struct { // TODO
+		// 	Indeces  []int
+		// 	SharedId int
+		// }{},
+	}
 	//
-	var scan func(v *Value, indeces []int, prefix string, indent int)
-	scan = func(v *Value, indeces []int, prefix string, indent int) {
-		for k, field := range v.Fields() {
-			if me.Ignored.Has(field.Value.pt) {
+	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
+	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
+		for k, field := range typeInfo.StructFields {
+			fieldTypeInfo := TypeCache.StatType(field.Type)
+			if me.Ignored.Has(fieldTypeInfo.Type) {
 				continue
 			}
 			//
 			name := ""
-			if !me.Elevated.Has(field.Value.pt) {
+			if !me.Elevated.Has(fieldTypeInfo.Type) {
 				for _, tagName := range append(me.Tags, "") {
-					if tagValue, ok := field.Field.Tag.Lookup(tagName); ok {
+					if tagValue, ok := field.Tag.Lookup(tagName); ok {
 						name = tagValue
 						break
 					} else if tagName == "" {
-						name = field.Field.Name
+						name = field.Name
 						if me.Transform != nil {
 							name = me.Transform(name)
 						}
@@ -151,64 +163,62 @@ func (me *Mapper) Map(T interface{}) (Mapping, error) {
 				name = prefix
 			}
 			nameIndeces := append(indeces, k)
-			if _, ok := mapper_TreatAsScalar[field.Value.pt]; ok {
-				rv[name] = nameIndeces
-			} else if field.Value.IsStruct {
-				scan(field.Value, nameIndeces, name, indent+1)
-			} else if field.Value.IsScalar {
-				rv[name] = nameIndeces
+			if _, ok := mapper_TreatAsScalar[fieldTypeInfo.Type]; ok {
+				rv.Indeces[name] = nameIndeces
+			} else if fieldTypeInfo.IsStruct {
+				scan(fieldTypeInfo, nameIndeces, name)
+			} else if fieldTypeInfo.IsScalar {
+				rv.Indeces[name] = nameIndeces
 			}
 		}
 	}
-	scan(v, []int{}, "", 0)
+	// Scan and assign the result to our known types.
+	scan(typeInfo, []int{}, "")
+	me.known.Store(typeInfo.Type, rv)
 	//
-	// Acquiring the write lock is delayed until after scanning because the desired use case is faster
-	// reads; the following lines are the smallest set in which the lock *MUST* be held.
-	//
-	// Our scan is complete so now we should assign the result to our known types.
-	me.mut.Lock()
-	defer me.mut.Unlock()
-	if me.known == nil {
-		me.known = make(map[reflect.Type]Mapping)
-	}
-	me.known[v.pt] = rv
-	//
-	return rv, nil
+	return rv
 }
 
 // Copy creates a copy of the Mapping.
-func (me Mapping) Copy() Mapping {
-	if me == nil {
-		return nil
+func (me *Mapping) Copy() *Mapping {
+	rv := &Mapping{
+		Indeces: map[string][]int{},
+		// CacheInfo: map[string]struct { // TODO
+		// 	Indeces  []int
+		// 	SharedId int
+		// }{},
 	}
-	rv := make(Mapping)
-	for k, v := range me {
-		rv[k] = append([]int{}, v...)
+	for k, v := range me.Indeces {
+		rv.Indeces[k] = append([]int{}, v...)
+		// TODO Copy CacheInfo as well.
 	}
 	return rv
 }
 
 // Get returns the indeces associated with key in the mapping.  If no such key
 // is found a nil slice is returned.
-func (me Mapping) Get(key string) []int {
+func (me *Mapping) Get(key string) []int {
 	v, _ := me.Lookup(key)
 	return v
 }
 
 // Lookup returns the value associated with key in the mapping.  If no such key is
 // found a nil slice is returned and ok is false; otherwise ok is true.
-func (me Mapping) Lookup(key string) (indeces []int, ok bool) {
-	if me == nil {
+func (me *Mapping) Lookup(key string) (indeces []int, ok bool) {
+	if me == nil || me.Indeces == nil {
 		return nil, false
 	}
-	indeces, ok = me[key]
+	indeces, ok = me.Indeces[key]
 	return indeces, ok
 }
 
 // String returns the Mapping as a string value.
-func (me Mapping) String() string {
+func (me *Mapping) String() string {
+	if me == nil {
+		return ""
+	}
 	parts := []string{}
-	for str, indeces := range me {
+	for str, indeces := range me.Indeces {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
 	}
 	sort.Strings(parts)
@@ -218,8 +228,16 @@ func (me Mapping) String() string {
 // bound_mapping_t is the implementation for BoundMapping.
 type bound_mapping_t struct {
 	value   *Value
-	mapping Mapping
+	mapping *Mapping
 	err     error
+}
+
+// new_bound_mapping_t creates a new bound_mapping_t type.
+func new_bound_mapping_t(value *Value, mapping *Mapping) *bound_mapping_t {
+	return &bound_mapping_t{
+		value:   value,
+		mapping: mapping,
+	}
 }
 
 // Assignables returns a slice of interfaces by field names where each element is a pointer
@@ -234,7 +252,7 @@ func (me *bound_mapping_t) Assignables(fields []string) ([]interface{}, error) {
 		if field, err := me.Field(name); err != nil {
 			return nil, errors.Errorf("%v while accessing field [%v]", err.Error(), name)
 		} else {
-			rv = append(rv, field.pv.Addr().Interface())
+			rv = append(rv, field.WriteValue.Addr().Interface())
 		}
 	}
 	return rv, nil
@@ -250,38 +268,83 @@ func (me *bound_mapping_t) Err() error {
 // Field returns the *Value for field.
 func (me *bound_mapping_t) Field(field string) (*Value, error) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	return me.value.FieldByIndex(me.mapping.Get(field))
+	if v, err := me.value.FieldByIndex(me.mapping.Get(field)); err != nil {
+		return nil, errors.Go(err)
+	} else {
+		return V(v), nil
+	}
 }
 
-// Rebind will replace the currently bound value with the new variable I.  If the underlying types are
-// not the same then an error is returned.
-func (me *bound_mapping_t) Rebind(I interface{}) error {
+// Rebind will replace the currently bound value with the new variable I.
+func (me *bound_mapping_t) Rebind(I interface{}) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	var v *Value
-	if tv, ok := I.(*Value); ok {
-		v = tv
-	} else {
-		v = V(I)
-	}
-	if v.pt != me.value.pt {
-		return errors.Errorf("Rebind expects same underlying type; had %T and got %T", me.value.pv.Interface(), v.pv.Interface())
-	}
 	me.err = nil
-	me.value = v
-	return nil
+	me.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
 func (me *bound_mapping_t) Set(field string, value interface{}) error {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
-	v, err := me.value.FieldByIndex(me.mapping.Get(field))
+	fieldValue, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
 		if me.err == nil {
 			me.err = errors.Go(err)
 		}
 		return errors.Go(err)
 	}
-	err = v.To(value)
+	//
+	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
+	// which will cut down our allocations and increase speed.
+	if fieldValue.Type() == reflect.TypeOf(value) {
+		switch tt := value.(type) {
+		case bool:
+			fieldValue.SetBool(tt)
+			return nil
+		case int:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int8:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int16:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int32:
+			fieldValue.SetInt(int64(tt))
+			return nil
+		case int64:
+			fieldValue.SetInt(tt)
+			return nil
+		case uint:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint8:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint16:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint32:
+			fieldValue.SetUint(uint64(tt))
+			return nil
+		case uint64:
+			fieldValue.SetUint(tt)
+			return nil
+		case float32:
+			fieldValue.SetFloat(float64(tt))
+			return nil
+		case float64:
+			fieldValue.SetFloat(tt)
+			return nil
+		case string:
+			fieldValue.SetString(tt)
+			return nil
+		}
+	}
+	//
+	// If the type-switch above didn't hit then we'll coerce the
+	// fieldValue to a *Value and use our swiss-army knife Value.To().
+	err = V(fieldValue).To(value)
 	if err != nil && me.err == nil {
 		me.err = errors.Errorf("While setting [%v]: %v", field, err.Error())
 	}

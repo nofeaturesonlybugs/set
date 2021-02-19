@@ -1,3 +1,7 @@
+/branch-benchmark
+    + Add TypeInfo, TypeInfoCache
+    + Add global TypeCache as an instance of TypeInfoCache.
+    
 /branch-mapper
 
 /develop

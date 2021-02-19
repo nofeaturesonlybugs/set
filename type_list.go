@@ -7,7 +7,7 @@ import (
 // TypeList is a list of reflect.Type.
 type TypeList map[reflect.Type]struct{}
 
-// NewTypeList creates a new TypeList type from a set of instantiated structs.
+// NewTypeList creates a new TypeList type from a set of instantiated types.
 func NewTypeList(args ...interface{}) TypeList {
 	rv := make(TypeList)
 	for _, arg := range args {

@@ -23,13 +23,13 @@ func TestPanics_Append(t *testing.T) {
 			elem, err := v.NewElem()
 			chk.NoError(err)
 			//
-			field, err := elem.FieldByIndex([]int{0})
+			field, err := elem.FieldByIndexAsValue([]int{0})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
 			chk.NoError(err)
 			//
-			field, err = elem.FieldByIndex([]int{1})
+			field, err = elem.FieldByIndexAsValue([]int{1})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
@@ -51,13 +51,13 @@ func TestPanics_Append(t *testing.T) {
 			elem, err := v.NewElem()
 			chk.NoError(err)
 			//
-			field, err := elem.FieldByIndex([]int{0})
+			field, err := elem.FieldByIndexAsValue([]int{0})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
 			chk.NoError(err)
 			//
-			field, err = elem.FieldByIndex([]int{1})
+			field, err = elem.FieldByIndexAsValue([]int{1})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
@@ -79,13 +79,13 @@ func TestPanics_Append(t *testing.T) {
 			elem, err := v.NewElem()
 			chk.NoError(err)
 			//
-			field, err := elem.FieldByIndex([]int{0})
+			field, err := elem.FieldByIndexAsValue([]int{0})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
 			chk.NoError(err)
 			//
-			field, err = elem.FieldByIndex([]int{1})
+			field, err = elem.FieldByIndexAsValue([]int{1})
 			chk.NoError(err)
 			chk.NotNil(field)
 			err = field.To(k)
