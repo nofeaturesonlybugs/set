@@ -1,4 +1,6 @@
 /develop
+
+0.2.0
     + Add Mapper, Mapping, BoundMapping
     + Add TypeInfo, TypeInfoCache
     + Add global TypeCache as an instance of TypeInfoCache.
