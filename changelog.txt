@@ -1,5 +1,7 @@
 /develop
-
+0.2.1
+    + No API changes.
+    
 0.2.0
     + Add Mapper, Mapping, BoundMapping
     + Add TypeInfo, TypeInfoCache
