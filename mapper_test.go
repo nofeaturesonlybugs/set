@@ -268,6 +268,39 @@ func TestBoundMappingSetFast(t *testing.T) {
 	}
 }
 
+func TestMapperBindCollision(t *testing.T) {
+	chk := assert.New(t)
+	type Db struct {
+		Id int
+	}
+	type A struct {
+		A string
+		Db
+	}
+	type B struct {
+		B string
+		Db
+	}
+	type T struct {
+		A
+		B
+	}
+	{
+		var t T
+		mapper := &set.Mapper{
+			Elevated: set.NewTypeList(Db{}),
+			Join:     "_",
+		}
+		bound := mapper.Bind(&t)
+		bound.Set("A_Id", "15")
+		bound.Set("B_Id", 25)
+		err := bound.Err()
+		chk.NoError(err)
+		chk.Equal(15, t.A.Id)
+		chk.Equal(25, t.B.Id)
+	}
+}
+
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	{ // Tests case where receiver is nil when calling Mapping.Lookup ~AND~ Mapping.String
