@@ -2,6 +2,7 @@ package set_test
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -213,14 +214,71 @@ func TestMapper_Bind_Rebind(t *testing.T) {
 	}
 }
 
+func TestBoundMappingSetFast(t *testing.T) {
+	chk := assert.New(t)
+	type T struct {
+		B   bool
+		I   int
+		I8  int8
+		I16 int16
+		I32 int32
+		I64 int64
+		U   uint
+		U8  uint8
+		U16 uint16
+		U32 uint32
+		U64 uint64
+		F32 float32
+		F64 float64
+		S   string
+	}
+	{
+		var t T
+		bound := set.DefaultMapper.Bind(&t)
+		bound.Set("B", true)
+		bound.Set("I", int(-42))
+		bound.Set("I8", int8(-8))
+		bound.Set("I16", int16(-16))
+		bound.Set("I32", int32(-32))
+		bound.Set("I64", int64(-64))
+		bound.Set("U", uint(42))
+		bound.Set("U8", uint8(8))
+		bound.Set("U16", uint16(16))
+		bound.Set("U32", uint32(32))
+		bound.Set("U64", uint64(64))
+		bound.Set("F32", float32(3.14))
+		bound.Set("F64", float64(6.28))
+		bound.Set("S", "string")
+		err := bound.Err()
+		chk.NoError(err)
+		chk.Equal(true, t.B)
+		chk.Equal(-42, t.I)
+		chk.Equal(int8(-8), t.I8)
+		chk.Equal(int16(-16), t.I16)
+		chk.Equal(int32(-32), t.I32)
+		chk.Equal(int64(-64), t.I64)
+		chk.Equal(uint(42), t.U)
+		chk.Equal(uint8(8), t.U8)
+		chk.Equal(uint16(16), t.U16)
+		chk.Equal(uint32(32), t.U32)
+		chk.Equal(uint64(64), t.U64)
+		chk.Equal(float32(3.14), t.F32)
+		chk.Equal(float64(6.28), t.F64)
+		chk.Equal("string", t.S)
+	}
+}
+
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	{ // Tests case where receiver is nil when calling Mapping.Lookup
-		var mapping set.Mapping
+	{ // Tests case where receiver is nil when calling Mapping.Lookup ~AND~ Mapping.String
+		var mapping *set.Mapping
 		_, ok := mapping.Lookup("Hi")
 		chk.Equal(false, ok)
+		s := mapping.String()
+		chk.Equal("", s)
 	}
 	{ // Tests case when type T is already scanned and uses Mapper.known
+		// ~AND~ mapping by reflect.Type
 		type T struct {
 			A string
 		}
@@ -228,6 +286,10 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.NotNil(mapping)
 		mapping = set.DefaultMapper.Map(T{})
 		chk.NotNil(mapping)
+		// by reflect.Type
+		m2 := set.DefaultMapper.Map(reflect.TypeOf(T{}))
+		chk.NotNil(m2)
+		chk.Equal(mapping, m2)
 	}
 	{ // Tests case when type T is already wrapped in *set.Value when calling Mapper.Map
 		type T struct {

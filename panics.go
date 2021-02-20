@@ -15,6 +15,7 @@ import (
 // You do not need to create or instantiate this type; instead you can use the global `var Panics`.
 type CanPanic struct{}
 
+// Panics is a global instance of CanPanic; it is provided for convenience.
 var Panics = CanPanic{}
 
 // Append appends any number of *Value types to the dest *Value.  The safest way to use this method

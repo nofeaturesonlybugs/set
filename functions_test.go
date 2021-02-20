@@ -51,6 +51,11 @@ func TestWritable(t *testing.T) {
 		chk.Equal(true, b)
 		chk.Equal(true, *bp)
 	}
+	{
+		v, ok := set.Writable(reflect.Value{})
+		chk.Equal(false, ok)
+		chk.Equal(false, v.IsValid())
+	}
 }
 
 func ExampleWritable() {

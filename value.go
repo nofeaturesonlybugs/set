@@ -7,10 +7,6 @@ import (
 	"github.com/nofeaturesonlybugs/errors"
 )
 
-const (
-	error_V_NotAssignable = "Original type passed to V() not assignable; pass an address."
-)
-
 // V returns a new Value.
 //
 // Memory is possibly created when calling this function:
@@ -185,11 +181,12 @@ func (me *Value) FieldByIndex(index []int) (reflect.Value, error) {
 // FieldByIndexAsValue calls into FieldByIndex and if there is no error the resulting reflect.Value is
 // wrapped within a call to V() to return a *Value.
 func (me *Value) FieldByIndexAsValue(index []int) (*Value, error) {
-	if v, err := me.FieldByIndex(index); err != nil {
+	var v reflect.Value
+	var err error
+	if v, err = me.FieldByIndex(index); err != nil {
 		return nil, errors.Go(err)
-	} else {
-		return V(v), nil
 	}
+	return V(v), nil
 }
 
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
@@ -467,9 +464,7 @@ func (me *Value) To(arg interface{}) error {
 	dataTypeInfo := TypeCache.StatType(dataValue.Type())
 	//
 	if me.IsSlice {
-		if err := me.Zero(); err != nil {
-			return errors.Go(err)
-		}
+		me.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
 		if !dataTypeInfo.IsSlice {
 			arg = []interface{}{arg}
 		}

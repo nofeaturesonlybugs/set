@@ -1840,7 +1840,78 @@ func BenchmarkMapperJsonUnmarshal(b *testing.B) {
 		}
 	}
 }
-func BenchmarkMapperBoundMapping(b *testing.B) {
+func BenchmarkMapperBoundMappingNoRebind(b *testing.B) {
+	rows, size := loadBenchmarkMapperData(b)
+	//
+	type Common struct {
+		Id int
+	}
+	type Timestamps struct {
+		CreatedTime  string
+		ModifiedTime string
+	}
+	type Person struct {
+		Common
+		Timestamps // Not used but present anyways
+		First      string
+		Last       string
+	}
+	type Vendor struct {
+		Common
+		Timestamps  // Not used but present anyways
+		Name        string
+		Description string
+		Contact     Person
+	}
+	type T struct {
+		Common
+		Timestamps
+		//
+		Price    int
+		Quantity int
+		Total    int
+		//
+		Customer Person
+		Vendor   Vendor
+	}
+	//
+	b.ResetTimer()
+	//
+	mapper := &set.Mapper{
+		Elevated: set.NewTypeList(Common{}, Timestamps{}),
+		Join:     "_",
+	}
+	//
+	for k := 0; k < b.N; k++ {
+		row := rows[k%size]
+		dest := new(T)
+		bound := mapper.Bind(&dest)
+		//
+		bound.Set("Id", row.Id)
+		bound.Set("CreatedTime", row.CreatedTime)
+		bound.Set("ModifiedTime", row.ModifiedTime)
+		bound.Set("Price", row.Price)
+		bound.Set("Quantity", row.Quantity)
+		bound.Set("Total", row.Total)
+		//
+		bound.Set("Customer_Id", row.CustomerId)
+		bound.Set("Customer_First", row.CustomerFirst)
+		bound.Set("Customer_Last", row.CustomerLast)
+		//
+		bound.Set("Vendor_Id", row.VendorId)
+		bound.Set("Vendor_Name", row.VendorName)
+		bound.Set("Vendor_Description", row.VendorDescription)
+		bound.Set("Vendor_Contact_Id", row.VendorContactId)
+		bound.Set("Vendor_Contact_First", row.VendorContactFirst)
+		bound.Set("Vendor_Contact_Last", row.VendorContactLast)
+		//
+		if err := bound.Err(); err != nil {
+			b.Fatalf("Unable to set: %v", err.Error())
+		}
+	}
+}
+
+func BenchmarkMapperBoundMappingWithRebind(b *testing.B) {
 	rows, size := loadBenchmarkMapperData(b)
 	//
 	type Common struct {
