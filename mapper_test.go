@@ -387,6 +387,10 @@ func TestMapperCodeCoverage(t *testing.T) {
 		chk.Equal(true, ok)
 		chk.NotNil(field)
 	}
+}
+
+func TestBoundMappingAssignables(t *testing.T) {
+	chk := assert.New(t)
 	{ // Tests BoundMapping.Assignables
 		type A struct {
 			A string
@@ -409,6 +413,49 @@ func TestMapperCodeCoverage(t *testing.T) {
 			chk.Error(err)
 			chk.Nil(assignables)
 			chk.Equal(0, len(assignables))
+		}
+	}
+	{ // Test when bound data is not writable.
+		type A struct {
+			A string
+			B string
+		}
+		data := A{}
+		bound := set.DefaultMapper.Bind(data)
+		chk.NotNil(bound)
+		assignables, err := bound.Assignables([]string{"B", "A"})
+		chk.Error(err)
+		chk.Nil(assignables)
+		chk.Equal(0, len(assignables))
+	}
+	{ // Test pointers for nested/embedded structs instantiated along the way.
+		type A struct {
+			A string
+			B string
+		}
+		type T struct {
+			*A
+			Field *A
+		}
+		data := []T{{}, {}}
+		for k := 0; k < len(data); k++ {
+			bound := set.DefaultMapper.Bind(&data[k])
+			chk.NotNil(bound)
+			assignables, err := bound.Assignables([]string{"A_B", "A_A", "Field_A", "Field_B"})
+			chk.NoError(err)
+			chk.NotNil(assignables)
+			chk.Equal(4, len(assignables))
+			// embedded + field
+			e, f := data[k].A, data[k].Field
+			chk.Equal(fmt.Sprintf("%p", &e.B), fmt.Sprintf("%p", assignables[0]))
+			chk.Equal(fmt.Sprintf("%p", &e.A), fmt.Sprintf("%p", assignables[1]))
+			chk.Equal(fmt.Sprintf("%p", &f.A), fmt.Sprintf("%p", assignables[2]))
+			chk.Equal(fmt.Sprintf("%p", &f.B), fmt.Sprintf("%p", assignables[3]))
+			//
+			chk.Equal(&e.B, assignables[0])
+			chk.Equal(&e.A, assignables[1])
+			chk.Equal(&f.A, assignables[2])
+			chk.Equal(&f.B, assignables[3])
 		}
 	}
 }
