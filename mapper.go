@@ -77,6 +77,11 @@ type Mapper struct {
 type BoundMapping interface {
 	// Assignables returns a slice of interfaces by field names where each element is a pointer
 	// to the field in the bound variable.
+	//
+	// During traversal this method will instantiate struct fields that are themselves structs.
+	//
+	// An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
+	// query results.
 	Assignables(fields []string) ([]interface{}, error)
 	// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 	// calls to Rebind()
