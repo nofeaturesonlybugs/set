@@ -45,6 +45,12 @@ type Mapper struct {
 	// See also NewTypeList().
 	Elevated TypeList
 	//
+	// Types in this list are treated as scalars when generating mappings; in other words
+	// their exported fields are not mapped and the mapping created targets the type as
+	// a whole.  This is useful when you want to create mappings for types such as sql.NullString
+	// without traversing within the sql.NullString itself.
+	TreatAsScalar TypeList
+	//
 	// A list of struct tags that will be used for name generation in order of preference.
 	// An example would be using this feature for both JSON and DB field name specification.
 	// If most of your db and json names match but you occasionally want to override the json
@@ -166,6 +172,8 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 			nameIndeces := append(indeces, k)
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
 				rv.Indeces[name] = nameIndeces
+			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
+				rv.Indeces[name] = nameIndeces
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name)
 			} else if fieldTypeInfo.IsScalar {
@@ -244,18 +252,32 @@ func newBoundMapping(value *Value, mapping *Mapping) *boundMapping {
 // Assignables returns a slice of interfaces by field names where each element is a pointer
 // to the field in the bound variable.
 //
+// During traversal this method will instantiate struct fields that are themselves structs.
+//
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
 func (me *boundMapping) Assignables(fields []string) ([]interface{}, error) {
 	// nil check is not necessary as bound_mapping_t is only created within this package.
+	if !me.value.CanWrite {
+		return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
+	}
 	rv := []interface{}{}
 	for _, name := range fields {
-		var field *Value
-		var err error
-		if field, err = me.Field(name); err != nil {
-			return nil, errors.Errorf("%v while accessing field [%v]", err.Error(), name)
+		indeces := me.mapping.Get(name)
+		if len(indeces) == 0 {
+			return nil, errors.Errorf("No mapping for field [%v]", name)
 		}
-		rv = append(rv, field.WriteValue.Addr().Interface())
+		v := me.value.WriteValue
+		for k, size := 0, len(indeces); k < size; k++ {
+			n := indeces[k] // n is the specific FieldIndex into v
+			if k < size-1 {
+				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
+				v, _ = Writable(v.Field(n))
+			} else {
+				// n is the final index; it represents a scalar/leaf at the end of the nested strut hierarchy.
+				rv = append(rv, v.Field(n).Addr().Interface())
+			}
+		}
 	}
 	return rv, nil
 }

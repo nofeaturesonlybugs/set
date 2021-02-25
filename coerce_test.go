@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nofeaturesonlybugs/set/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCoerceToBool(t *testing.T) {
