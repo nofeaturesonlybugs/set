@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/nofeaturesonlybugs/set"
-	"github.com/nofeaturesonlybugs/set/assert"
 )
 
 func TestMapper(t *testing.T) {

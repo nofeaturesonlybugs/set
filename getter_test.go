@@ -3,8 +3,9 @@ package set_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/nofeaturesonlybugs/set"
-	"github.com/nofeaturesonlybugs/set/assert"
 )
 
 func TestMapGetter_codeCoverage(t *testing.T) {

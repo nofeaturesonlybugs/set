@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/nofeaturesonlybugs/set"
-	"github.com/nofeaturesonlybugs/set/assert"
 )
 
 func TestPanics_Append(t *testing.T) {
