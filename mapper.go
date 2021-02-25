@@ -45,6 +45,12 @@ type Mapper struct {
 	// See also NewTypeList().
 	Elevated TypeList
 	//
+	// Types in this list are treated as scalars when generating mappings; in other words
+	// their exported fields are not mapped and the mapping created targets the type as
+	// a whole.  This is useful when you want to create mappings for types such as sql.NullString
+	// without traversing within the sql.NullString itself.
+	TreatAsScalar TypeList
+	//
 	// A list of struct tags that will be used for name generation in order of preference.
 	// An example would be using this feature for both JSON and DB field name specification.
 	// If most of your db and json names match but you occasionally want to override the json
@@ -165,6 +171,8 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 			}
 			nameIndeces := append(indeces, k)
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
+				rv.Indeces[name] = nameIndeces
+			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
 				rv.Indeces[name] = nameIndeces
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name)

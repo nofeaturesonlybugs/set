@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"database/sql"
 	"fmt"
 	"reflect"
 	"strings"
@@ -520,6 +521,43 @@ func ExampleMapper() {
 	// [0 2] common_updated_time
 	// [1] name
 	// [2] age
+}
+
+func ExampleMapper_treatAsScalar() {
+	type T struct {
+		S string
+		T time.Time
+		N sql.NullString
+	}
+
+	mapping := set.DefaultMapper.Map(T{})
+	if mapping.Get("T") != nil {
+		fmt.Println("T is mapped because time.Time is automatically treated as a scalar.")
+	}
+	if mapping.Get("N") == nil {
+		fmt.Println("N can not be found because sql.NullString was not treated as a scalar.")
+	}
+	if mapping.Get("N_Valid") != nil {
+		fmt.Println("N_Valid was mapped because the exported fields in sql.NullString were mapped.")
+	}
+
+	//
+	// Now we'll treat sql.NullString as a scalar when mapping.
+	mapper := &set.Mapper{
+		TreatAsScalar: set.NewTypeList(sql.NullString{}),
+	}
+	mapping = mapper.Map(T{})
+	if mapping.Get("N") != nil {
+		fmt.Println("N is now mapped to the entire sql.NullString member.")
+		v, _ := set.V(&T{}).FieldByIndex(mapping.Get("N"))
+		fmt.Printf("N's type is %v\n", v.Type())
+	}
+
+	// Output: T is mapped because time.Time is automatically treated as a scalar.
+	// N can not be found because sql.NullString was not treated as a scalar.
+	// N_Valid was mapped because the exported fields in sql.NullString were mapped.
+	// N is now mapped to the entire sql.NullString member.
+	// N's type is sql.NullString
 }
 
 func ExampleMapper_Bind() {

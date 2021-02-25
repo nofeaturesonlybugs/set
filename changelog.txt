@@ -4,6 +4,9 @@
         field was a pointer.  The error was the previous implementation always follows and instantiates
         pointers so the Scan() was receiving a *T when it required a **T.
 
+    + Add feature.  Mapper.TreatAsScalar can be used to treat certain types as if they were
+        scalars when generating mappings.
+
 0.2.2
     + Add go.mod
 
