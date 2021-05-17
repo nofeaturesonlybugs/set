@@ -118,6 +118,23 @@ func (me *Value) Append(items ...interface{}) error {
 	return err
 }
 
+// Copy creates a clone of the *Value and its internal members.
+//
+// If you need to create many *Value for a type T in order to Rebind(T) in a goroutine
+// architecture then consider creating and caching a V(T) early in your application
+// and then calling Copy() on that cached copy before using Rebind().
+func (me *Value) Copy() *Value {
+	rv := &Value{
+		TypeInfo:     me.TypeInfo,
+		CanWrite:     me.CanWrite,
+		TopValue:     me.TopValue,
+		WriteValue:   me.WriteValue,
+		ElemTypeInfo: me.ElemTypeInfo,
+		original:     me.original,
+	}
+	return rv
+}
+
 // Fields returns a slice of Field structs when Value is wrapped around a struct; for all other values
 // nil is returned.
 //
