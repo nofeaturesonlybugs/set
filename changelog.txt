@@ -1,5 +1,6 @@
 /develop
 
+[0.3.0]
     + Breaking change migration (impact=low).
         set.BoundMapping.Assignables() as a second argument.  You can set this argument to nil
         or pre-allocate a slice with same length as the fields argument.
