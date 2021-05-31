@@ -27,6 +27,19 @@ func TestMapper(t *testing.T) {
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 	}
 	{
+		// Skips unexported fields.
+		type A struct {
+			A     string
+			B     string
+			shhhh int
+		}
+		var data A
+		mapping := set.DefaultMapper.Map(&data)
+		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
+		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
+		chk.Empty(mapping.Get("shhhh"))
+	}
+	{
 		type CommonDb struct {
 			Pk          int    `db:"pk" json:"id"`
 			CreatedTime string `db:"created_tmz" json:"created_time"`
