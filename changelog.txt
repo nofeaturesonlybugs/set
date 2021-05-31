@@ -1,4 +1,5 @@
-/branch-struct-field-by-mapping
+/develop
+
     + TODO: Requires bump to 0.3.0 due to BoundMapping interface breaking change.
 
     + Breaking change migration (impact=low).
@@ -23,8 +24,6 @@
     
     + set.Value
             + Add method Copy().
-
-/develop
 
 0.2.3
     + Bug fix.  BoundMapping.Assignables() did not work as expected when attempting to Scan()
