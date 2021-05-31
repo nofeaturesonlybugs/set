@@ -1,4 +1,6 @@
 /develop
+
+0.2.3
     + Bug fix.  BoundMapping.Assignables() did not work as expected when attempting to Scan()
         results from a database query that returned NULL for columns even if the destination struct
         field was a pointer.  The error was the previous implementation always follows and instantiates
