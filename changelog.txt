@@ -1,5 +1,30 @@
 /develop
 
+    + TODO: Requires bump to 0.3.0 due to BoundMapping interface breaking change.
+
+    + Breaking change migration (impact=low).
+        set.BoundMapping.Assignables() as a second argument.  You can set this argument to nil
+        or pre-allocate a slice with same length as the fields argument.
+
+    + set.BoundMapping
+            + Add method Copy().
+            + Add method Fields().
+            + Breaking change: Assignables() (and Fields()) accept a
+            pre-allocated slice as their second argument.
+    
+    + set.Mapper
+            + Bug fix.  When iterating struct fields unexported (aka
+            private) fields are implicitly ignored.  Previously they were
+            adding to the mapping and could result in errors later when
+            using Mapping or BoundMapping.
+    
+    + set.Mapping
+            + Add field Keys.
+            + Add field StructFields.
+    
+    + set.Value
+            + Add method Copy().
+
 0.2.3
     + Bug fix.  BoundMapping.Assignables() did not work as expected when attempting to Scan()
         results from a database query that returned NULL for columns even if the destination struct
