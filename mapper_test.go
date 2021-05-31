@@ -27,6 +27,19 @@ func TestMapper(t *testing.T) {
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 	}
 	{
+		// Skips unexported fields.
+		type A struct {
+			A     string
+			B     string
+			shhhh int
+		}
+		var data A
+		mapping := set.DefaultMapper.Map(&data)
+		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
+		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
+		chk.Empty(mapping.Get("shhhh"))
+	}
+	{
 		type CommonDb struct {
 			Pk          int    `db:"pk" json:"id"`
 			CreatedTime string `db:"created_tmz" json:"created_time"`
@@ -402,7 +415,7 @@ func TestBoundMappingAssignables(t *testing.T) {
 		for k := 0; k < len(data); k++ {
 			bound := set.DefaultMapper.Bind(&data[k])
 			chk.NotNil(bound)
-			assignables, err := bound.Assignables([]string{"B", "A"})
+			assignables, err := bound.Assignables([]string{"B", "A"}, nil)
 			chk.NoError(err)
 			chk.NotNil(assignables)
 			chk.Equal(2, len(assignables))
@@ -411,7 +424,7 @@ func TestBoundMappingAssignables(t *testing.T) {
 			chk.Equal(&data[k].B, assignables[0])
 			chk.Equal(&data[k].A, assignables[1])
 			//
-			assignables, err = bound.Assignables([]string{"b", "b"})
+			assignables, err = bound.Assignables([]string{"b", "b"}, nil)
 			chk.Error(err)
 			chk.Nil(assignables)
 			chk.Equal(0, len(assignables))
@@ -425,7 +438,7 @@ func TestBoundMappingAssignables(t *testing.T) {
 		data := A{}
 		bound := set.DefaultMapper.Bind(data)
 		chk.NotNil(bound)
-		assignables, err := bound.Assignables([]string{"B", "A"})
+		assignables, err := bound.Assignables([]string{"B", "A"}, nil)
 		chk.Error(err)
 		chk.Nil(assignables)
 		chk.Equal(0, len(assignables))
@@ -443,7 +456,7 @@ func TestBoundMappingAssignables(t *testing.T) {
 		for k := 0; k < len(data); k++ {
 			bound := set.DefaultMapper.Bind(&data[k])
 			chk.NotNil(bound)
-			assignables, err := bound.Assignables([]string{"A_B", "A_A", "Field_A", "Field_B"})
+			assignables, err := bound.Assignables([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
 			chk.NoError(err)
 			chk.NotNil(assignables)
 			chk.Equal(4, len(assignables))
@@ -458,6 +471,139 @@ func TestBoundMappingAssignables(t *testing.T) {
 			chk.Equal(&e.A, assignables[1])
 			chk.Equal(&f.A, assignables[2])
 			chk.Equal(&f.B, assignables[3])
+		}
+	}
+}
+
+func TestBoundMappingCopy(t *testing.T) {
+	chk := assert.New(t)
+	//
+	type A struct {
+		A string
+		B string
+	}
+	var b1, b2 set.BoundMapping
+	data := []A{{"a1", "b1"}, {"a2", "b2"}}
+	for k := 0; k < len(data); k++ {
+		b1 = set.DefaultMapper.Bind(&data[k])
+		chk.NotNil(b1)
+		fields, err := b1.Fields([]string{"B", "A"}, nil)
+		chk.NoError(err)
+		chk.NotNil(fields)
+		chk.Equal(2, len(fields))
+		chk.Equal(data[k].B, fields[0])
+		chk.Equal(data[k].A, fields[1])
+		//
+		fields, err = b1.Assignables([]string{"b", "b"}, nil)
+		chk.Error(err)
+		chk.Nil(fields)
+		chk.Equal(0, len(fields))
+	}
+	//
+	b2 = b1.Copy()
+	chk.NotNil(b2)
+	for k := 0; k < len(data); k++ {
+		b2.Rebind(&data[k])
+		fields, err := b2.Fields([]string{"B", "A"}, nil)
+		chk.NoError(err)
+		chk.NotNil(fields)
+		chk.Equal(2, len(fields))
+		chk.Equal(data[k].B, fields[0])
+		chk.Equal(data[k].A, fields[1])
+		//
+		fields, err = b2.Assignables([]string{"b", "b"}, nil)
+		chk.Error(err)
+		chk.Nil(fields)
+		chk.Equal(0, len(fields))
+	}
+}
+
+func TestBoundMappingFields(t *testing.T) {
+	chk := assert.New(t)
+	{ // Tests BoundMapping.Fields
+		type A struct {
+			A string
+			B string
+		}
+		data := []A{{"a1", "b1"}, {"a2", "b2"}}
+		for k := 0; k < len(data); k++ {
+			bound := set.DefaultMapper.Bind(&data[k])
+			chk.NotNil(bound)
+			fields, err := bound.Fields([]string{"B", "A"}, nil)
+			chk.NoError(err)
+			chk.NotNil(fields)
+			chk.Equal(2, len(fields))
+			chk.Equal(data[k].B, fields[0])
+			chk.Equal(data[k].A, fields[1])
+			//
+			fields, err = bound.Fields([]string{"b", "b"}, nil)
+			chk.Error(err)
+			chk.Nil(fields)
+			chk.Equal(0, len(fields))
+		}
+	}
+	{ // Test when bound data is not writable.
+		type A struct {
+			A string
+			B string
+		}
+		data := A{}
+		bound := set.DefaultMapper.Bind(data)
+		chk.NotNil(bound)
+		fields, err := bound.Fields([]string{"B", "A"}, nil)
+		chk.Error(err)
+		chk.Nil(fields)
+		chk.Equal(0, len(fields))
+	}
+	{ // Test when unknown field is requested.
+		type A struct {
+			A string
+			B string
+		}
+		data := A{}
+		bound := set.DefaultMapper.Bind(&data)
+		chk.NotNil(bound)
+		fields, err := bound.Fields([]string{"BB", "A"}, nil)
+		chk.Error(err)
+		chk.Nil(fields)
+		chk.Equal(0, len(fields))
+	}
+	{ // Test pointers for nested/embedded structs instantiated along the way.
+		type A struct {
+			A string
+			B string
+		}
+		type T struct {
+			*A
+			Field *A
+		}
+		data := []T{{}, {}}
+		for k := 0; k < len(data); k++ {
+			bound := set.DefaultMapper.Bind(&data[k])
+			chk.NotNil(bound)
+			fields, err := bound.Fields([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
+			chk.NoError(err)
+			chk.NotNil(fields)
+			chk.Equal(4, len(fields))
+			// embedded + field
+			e, f := data[k].A, data[k].Field
+			chk.Equal(e.B, fields[0])
+			chk.Equal(e.A, fields[1])
+			chk.Equal(f.A, fields[2])
+			chk.Equal(f.B, fields[3])
+			//
+			data[k].A.A = fmt.Sprintf("a%v", k)
+			data[k].A.B = fmt.Sprintf("b%v", k)
+			data[k].Field.A = fmt.Sprintf("field.a%v", k)
+			data[k].Field.B = fmt.Sprintf("field.b%v", k)
+			fields, err = bound.Fields([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
+			chk.NoError(err)
+			chk.NotNil(fields)
+			chk.Equal(4, len(fields))
+			chk.Equal(data[k].A.B, fields[0])
+			chk.Equal(data[k].A.A, fields[1])
+			chk.Equal(data[k].Field.A, fields[2])
+			chk.Equal(data[k].Field.B, fields[3])
 		}
 	}
 }

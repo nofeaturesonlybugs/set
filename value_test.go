@@ -125,6 +125,19 @@ func TestValue_rebind(t *testing.T) {
 	}
 }
 
+func TestValue_copy(t *testing.T) {
+	chk := assert.New(t)
+	//
+	var b bool
+	v := set.V(&b)
+	err := v.To(true)
+	chk.NoError(err)
+	//
+	v2 := v.Copy()
+	chk.NotNil(v2)
+	chk.True(v2.WriteValue.Bool())
+}
+
 func TestValue_set(t *testing.T) {
 	chk := assert.New(t)
 	//

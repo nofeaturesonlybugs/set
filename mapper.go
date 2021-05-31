@@ -16,11 +16,17 @@ var mapperTreatAsScalar = map[reflect.Type]struct{}{
 	reflect.TypeOf(&time.Time{}): {},
 }
 
-// Mapping is the result of traversing nested structures to generate a mapping of Key-to-Indeces where:
-//	Key is a string key representing a common or friendly name for the nested struct member.
-//	Indeces is an []int that can be used to index to the proper struct member.
+// Mapping is the result of traversing nested structures to generate a mapping of Key-to-Fields.
 type Mapping struct {
+	// Keys is a slice of key names in the order they were encountered during the mapping.
+	Keys []string
+	// Using a mapped name as a key the []int is the slice of indeces needed to traverse
+	// the mapped struct to the nested field.
 	Indeces map[string][]int
+	// Using a mapped name as a key the StructField is the nested field.  Access to this
+	// member is useful if your client package needs to inspect struct-fields-by-mapped-name; such
+	// as in obtaining struct tags.
+	StructFields map[string]reflect.StructField
 	// CacheInfo map[string]struct { // TODO
 	// 	Indeces  []int
 	// 	SharedId int
@@ -77,12 +83,36 @@ type Mapper struct {
 type BoundMapping interface {
 	// Assignables returns a slice of interfaces by field names where each element is a pointer
 	// to the field in the bound variable.
-	Assignables(fields []string) ([]interface{}, error)
+	//
+	// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
+	// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
+	// and the lengths are not checked, meaning your program could panic.
+	//
+	// During traversal this method will instantiate struct fields that are themselves structs.
+	//
+	// An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
+	// query results.
+	Assignables(fields []string, rv []interface{}) ([]interface{}, error)
+	// Copy creates an exact copy of the BoundMapping.  Since a BoundMapping is implicitly tied to a single
+	// value sometimes it may be useful to create and cache a BoundMapping early in a program's initialization and
+	// then call Copy() to work with multiple instances of bound values simultaneously.
+	Copy() BoundMapping
 	// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 	// calls to Rebind()
 	Err() error
 	// Field returns the *Value for field.
 	Field(field string) (*Value, error)
+	// Fields returns a slice of interfaces by field names where each element is the field value.
+	//
+	// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
+	// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
+	// and the lengths are not checked, meaning your program could panic.
+	//
+	// During traversal this method will instantiate struct fields that are themselves structs.
+	//
+	// An example use-case would be obtaining a slice of query arguments by column name during
+	// database queries.
+	Fields(fields []string, rv []interface{}) ([]interface{}, error)
 	// Rebind will replace the currently bound value with the new variable I.  If the underlying types do
 	// not match a panic will occur.
 	Rebind(I interface{})
@@ -134,7 +164,9 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 	}
 	//
 	rv := &Mapping{
-		Indeces: map[string][]int{},
+		Keys:         []string{},
+		Indeces:      map[string][]int{},
+		StructFields: map[string]reflect.StructField{},
 		// CacheInfo: map[string]struct { // TODO
 		// 	Indeces  []int
 		// 	SharedId int
@@ -144,6 +176,9 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
 	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
 		for k, field := range typeInfo.StructFields {
+			if field.PkgPath != "" {
+				continue
+			}
 			fieldTypeInfo := TypeCache.StatType(field.Type)
 			if me.Ignored.Has(fieldTypeInfo.Type) {
 				continue
@@ -171,13 +206,13 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 			}
 			nameIndeces := append(indeces, k)
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Indeces[name] = nameIndeces
+				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
 			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Indeces[name] = nameIndeces
+				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name)
 			} else if fieldTypeInfo.IsScalar {
-				rv.Indeces[name] = nameIndeces
+				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
 			}
 		}
 	}
@@ -191,14 +226,17 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 // Copy creates a copy of the Mapping.
 func (me *Mapping) Copy() *Mapping {
 	rv := &Mapping{
-		Indeces: map[string][]int{},
+		Keys:         append([]string{}, me.Keys...),
+		Indeces:      map[string][]int{},
+		StructFields: map[string]reflect.StructField{},
 		// CacheInfo: map[string]struct { // TODO
 		// 	Indeces  []int
 		// 	SharedId int
 		// }{},
 	}
-	for k, v := range me.Indeces {
-		rv.Indeces[k] = append([]int{}, v...)
+	for _, key := range me.Keys {
+		rv.Indeces[key] = append([]int{}, me.Indeces[key]...)
+		rv.StructFields[key] = me.StructFields[key]
 		// TODO Copy CacheInfo as well.
 	}
 	return rv
@@ -236,12 +274,16 @@ func (me *Mapping) String() string {
 
 // boundMapping is the implementation for BoundMapping.
 type boundMapping struct {
-	value   *Value
+	value *Value
+	err   error
+	//
+	// NB: Fields below here are read-only.  boundMapping does not alter them in any way
+	// thus during Copy() they do not need to be copied.  This is an effort to reduce
+	// memory allocations.
 	mapping *Mapping
-	err     error
 }
 
-// newBoundMapping creates a new bound_mapping_t type.
+// newBoundMapping creates a new boundMapping type.
 func newBoundMapping(value *Value, mapping *Mapping) *boundMapping {
 	return &boundMapping{
 		value:   value,
@@ -252,17 +294,23 @@ func newBoundMapping(value *Value, mapping *Mapping) *boundMapping {
 // Assignables returns a slice of interfaces by field names where each element is a pointer
 // to the field in the bound variable.
 //
+// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
+// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
+// and the lengths are not checked, meaning your program could panic.
+//
 // During traversal this method will instantiate struct fields that are themselves structs.
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
-func (me *boundMapping) Assignables(fields []string) ([]interface{}, error) {
-	// nil check is not necessary as bound_mapping_t is only created within this package.
+func (me *boundMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
+	// nil check is not necessary as boundMapping is only created within this package.
 	if !me.value.CanWrite {
 		return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
 	}
-	rv := []interface{}{}
-	for _, name := range fields {
+	if rv == nil {
+		rv = make([]interface{}, len(fields))
+	}
+	for fieldnum, name := range fields {
 		indeces := me.mapping.Get(name)
 		if len(indeces) == 0 {
 			return nil, errors.Errorf("No mapping for field [%v]", name)
@@ -274,24 +322,37 @@ func (me *boundMapping) Assignables(fields []string) ([]interface{}, error) {
 				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
 				v, _ = Writable(v.Field(n))
 			} else {
-				// n is the final index; it represents a scalar/leaf at the end of the nested strut hierarchy.
-				rv = append(rv, v.Field(n).Addr().Interface())
+				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+				rv[fieldnum] = v.Field(n).Addr().Interface()
 			}
 		}
 	}
 	return rv, nil
 }
 
+// Copy creates an exact copy of the BoundMapping.  Since a BoundMapping is implicitly tied to a single
+// value sometimes it may be useful to create and cache a BoundMapping early in a program's initialization and
+// then call Copy() to work with multiple instances of bound values simultaneously.
+func (me *boundMapping) Copy() BoundMapping {
+	return &boundMapping{
+		value: me.value.Copy(),
+		err:   me.err,
+		// NB: Don't need to copy me.mapping since we never alter it.
+		// mapping: me.mapping.Copy(),
+		mapping: me.mapping,
+	}
+}
+
 // Err returns an error that may have occurred during repeated calls to Set(); it is reset on
 // calls to Rebind()
 func (me *boundMapping) Err() error {
-	// nil check is not necessary as bound_mapping_t is only created within this package.
+	// nil check is not necessary as boundMapping is only created within this package.
 	return me.err
 }
 
 // Field returns the *Value for field.
 func (me *boundMapping) Field(field string) (*Value, error) {
-	// nil check is not necessary as bound_mapping_t is only created within this package.
+	// nil check is not necessary as boundMapping is only created within this package.
 	var v reflect.Value
 	var err error
 	if v, err = me.value.FieldByIndex(me.mapping.Get(field)); err != nil {
@@ -300,16 +361,54 @@ func (me *boundMapping) Field(field string) (*Value, error) {
 	return V(v), nil
 }
 
+// Fields returns a slice of interfaces by field names where each element is the field value.
+//
+// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
+// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
+// and the lengths are not checked, meaning your program might panic if rv is not the correct length.
+//
+// During traversal this method will instantiate struct fields that are themselves structs.
+//
+// An example use-case would be obtaining a slice of query arguments by column name during
+// database queries.
+func (me *boundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
+	// nil check is not necessary as boundMapping is only created within this package.
+	if !me.value.CanWrite {
+		return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
+	}
+	if rv == nil {
+		rv = make([]interface{}, len(fields))
+	}
+	for fieldnum, name := range fields {
+		indeces := me.mapping.Get(name)
+		if len(indeces) == 0 {
+			return nil, errors.Errorf("No mapping for field [%v]", name)
+		}
+		v := me.value.WriteValue
+		for k, size := 0, len(indeces); k < size; k++ {
+			n := indeces[k] // n is the specific FieldIndex into v
+			if k < size-1 {
+				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
+				v, _ = Writable(v.Field(n))
+			} else {
+				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+				rv[fieldnum] = v.Field(n).Interface()
+			}
+		}
+	}
+	return rv, nil
+}
+
 // Rebind will replace the currently bound value with the new variable I.
 func (me *boundMapping) Rebind(I interface{}) {
-	// nil check is not necessary as bound_mapping_t is only created within this package.
+	// nil check is not necessary as boundMapping is only created within this package.
 	me.err = nil
 	me.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
 func (me *boundMapping) Set(field string, value interface{}) error {
-	// nil check is not necessary as bound_mapping_t is only created within this package.
+	// nil check is not necessary as boundMapping is only created within this package.
 	fieldValue, err := me.value.FieldByIndex(me.mapping.Get(field))
 	if err != nil {
 		if me.err == nil {
