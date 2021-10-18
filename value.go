@@ -469,6 +469,14 @@ func (me *Value) To(arg interface{}) error {
 			me.WriteValue.Set(reflect.ValueOf(arg))
 		}
 		return nil
+	} else if me.IsScalar && T.Kind() == me.Kind && T.ConvertibleTo(me.Type) {
+		// This catches scenarios where the types differ but the underlying kinds do not; for example:
+		//		type NewString string
+		//		var dst NewString
+		//		src := "A regular string."
+		//		set.V(&dst).To(src)
+		me.WriteValue.Set(reflect.ValueOf(arg).Convert(me.Type))
+		return nil
 	}
 	//
 	// If arg/data represents any type of pointer we want to get to the final value:

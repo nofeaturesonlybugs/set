@@ -1,8 +1,15 @@
 /develop
 
+    + Bug fix.  set.V().To() failed when the types were different but underlying kinds were the same.
+        For example the following would fail:
+            type NewT string
+            var dst NewT                // Type is NewT and kind is string.
+            src := "A regular string."  // Type is string and kind is string.
+            set.V(&dst).To(src)         // Would result in unable to coerce string-to-string error.
+
 0.3.0
     + Breaking change migration (impact=low).
-        set.BoundMapping.Assignables() as a second argument.  You can set this argument to nil
+        set.BoundMapping.Assignables() has a second argument.  You can set this argument to nil
         or pre-allocate a slice with same length as the fields argument.
 
     + set.BoundMapping

@@ -569,6 +569,36 @@ func TestValue_setSliceCreatesCopies(t *testing.T) {
 	}
 }
 
+func TestValue_setDifferentTypesButSameKind(t *testing.T) {
+	chk := assert.New(t)
+	//
+	// When a new type is created but its underlying kind is a built-in type.
+	{
+		type AltString string
+		src := "Hello, World"
+		var dst AltString
+		err := set.V(&dst).To(src)
+		chk.NoError(err)
+		chk.Equal(AltString("Hello, World"), dst)
+	}
+	{
+		type AltInt int
+		src := 42
+		var dst AltInt
+		err := set.V(&dst).To(src)
+		chk.NoError(err)
+		chk.Equal(AltInt(42), dst)
+	}
+	{
+		type AltUint uint
+		src := 42
+		var dst AltUint
+		err := set.V(&dst).To(src)
+		chk.NoError(err)
+		chk.Equal(AltUint(42), dst)
+	}
+}
+
 func TestValue_zero(t *testing.T) {
 	chk := assert.New(t)
 	//
