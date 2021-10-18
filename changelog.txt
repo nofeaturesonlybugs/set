@@ -1,5 +1,6 @@
 /develop
 
+0.3.1
     + Bug fix.  set.V().To() failed when the types were different but underlying kinds were the same.
         For example the following would fail:
             type NewT string
