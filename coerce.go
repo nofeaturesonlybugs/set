@@ -62,6 +62,18 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 		}
 		return nil
 	},
+	"float-to-float": func(target reflect.Value, value reflect.Value) error {
+		// NB: 	This occurs when going to floats of different sizes.  Ideally such a case could
+		// 		be handled before ever reaching here but this serves for now.
+		// TODO Try and catch this "earlier" in assignment chain while also maintaining performance.
+		//		Also examine float-to-float for boundmappings.
+		v := value.Float()
+		if overflow := target.OverflowFloat(v); overflow {
+			return errors.Errorf("assign %v from %v to %v would overflow", v, value.Type(), target.Type())
+		}
+		target.SetFloat(v)
+		return nil
+	},
 	"int-to-float": func(target reflect.Value, value reflect.Value) error {
 		target.SetFloat(float64(value.Int()))
 		return nil
@@ -90,6 +102,18 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 	},
 	"float-to-int": func(target reflect.Value, value reflect.Value) error {
 		target.SetInt(int64(value.Float()))
+		return nil
+	},
+	"int-to-int": func(target reflect.Value, value reflect.Value) error {
+		// NB: 	This occurs when going to ints of different sizes.  Ideally such a case could
+		// 		be handled before ever reaching here but this serves for now.
+		// TODO Try and catch this "earlier" in assignment chain while also maintaining performance.
+		//		Also examine int-to-int for boundmappings.
+		v := value.Int()
+		if overflow := target.OverflowInt(v); overflow {
+			return errors.Errorf("assign %v from %v to %v would overflow", v, value.Type(), target.Type())
+		}
+		target.SetInt(v)
 		return nil
 	},
 	"string-to-int": func(target reflect.Value, value reflect.Value) error {
@@ -143,6 +167,18 @@ var coercions = map[string]func(reflect.Value, reflect.Value) error{
 			return errors.Go(err)
 		}
 		return err
+	},
+	"uint-to-uint": func(target reflect.Value, value reflect.Value) error {
+		// NB: 	This occurs when going to uints of different sizes.  Ideally such a case could
+		// 		be handled before ever reaching here but this serves for now.
+		// TODO Try and catch this "earlier" in assignment chain while also maintaining performance.
+		//		Also examine uint-to-uint for boundmappings.
+		v := value.Uint()
+		if overflow := target.OverflowUint(v); overflow {
+			return errors.Errorf("assign %v from %v to %v would overflow", v, value.Type(), target.Type())
+		}
+		target.SetUint(v)
+		return nil
 	},
 
 	"bool-to-string": func(target reflect.Value, value reflect.Value) error {
