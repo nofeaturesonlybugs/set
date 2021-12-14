@@ -1,5 +1,11 @@
 /develop
 
+0.3.2
+    + Bug fix.  set.V(&dst).To(src) would fail when dst and src represented the same class of data
+        but with different bit sizes.  For example set.V(&i64).To(i8(12)) would return an error stating
+        "conversion from int-to-int" is not supported.  This has been fixed for floats, ints, and uints
+        and the conversion now returns an error if the assignment would result in overflow into the target.
+        
 0.3.1
     + Bug fix.  set.V().To() failed when the types were different but underlying kinds were the same.
         For example the following would fail:
