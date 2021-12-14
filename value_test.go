@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -200,6 +201,81 @@ func TestValue_set(t *testing.T) {
 		chk.Equal(true, *v)
 		chk.Equal(o, v)
 	}
+}
+
+func TestValueTo_FloatToFloat(t *testing.T) {
+	chk := assert.New(t)
+	var F32 float32
+	var F64 float64
+	err := set.V(&F64).To(float32(8))
+	chk.NoError(err)
+	chk.Equal(float64(8), F64)
+	err = set.V(&F64).To(float32(16))
+	chk.NoError(err)
+	chk.Equal(float64(16), F64)
+	err = set.V(&F64).To(float32(32))
+	chk.NoError(err)
+	chk.Equal(float64(32), F64)
+	err = set.V(&F64).To(float64(-1))
+	chk.NoError(err)
+	chk.Equal(float64(-1), F64)
+	//
+	err = set.V(&F32).To(float64(math.MaxFloat32))
+	chk.NoError(err)
+	chk.Equal(float32(math.MaxFloat32), F32)
+	err = set.V(&F32).To(float64(math.MaxFloat64))
+	chk.Error(err)
+	chk.Equal(float32(0), F32)
+}
+
+func TestValueTo_IntToInt(t *testing.T) {
+	chk := assert.New(t)
+	var I8 int8
+	var I64 int64
+	err := set.V(&I64).To(int8(8))
+	chk.NoError(err)
+	chk.Equal(int64(8), I64)
+	err = set.V(&I64).To(int16(16))
+	chk.NoError(err)
+	chk.Equal(int64(16), I64)
+	err = set.V(&I64).To(int32(32))
+	chk.NoError(err)
+	chk.Equal(int64(32), I64)
+	err = set.V(&I64).To(int(-1))
+	chk.NoError(err)
+	chk.Equal(int64(-1), I64)
+	//
+	err = set.V(&I8).To(int64(math.MaxInt8))
+	chk.NoError(err)
+	chk.Equal(int8(math.MaxInt8), I8)
+	err = set.V(&I8).To(int64(math.MaxInt64))
+	chk.Error(err)
+	chk.Equal(int8(0), I8)
+}
+
+func TestValueTo_UintToUint(t *testing.T) {
+	chk := assert.New(t)
+	var U8 uint8
+	var U64 uint64
+	err := set.V(&U64).To(uint8(8))
+	chk.NoError(err)
+	chk.Equal(uint64(8), U64)
+	err = set.V(&U64).To(uint16(16))
+	chk.NoError(err)
+	chk.Equal(uint64(16), U64)
+	err = set.V(&U64).To(uint32(32))
+	chk.NoError(err)
+	chk.Equal(uint64(32), U64)
+	err = set.V(&U64).To(uint(math.MaxInt32))
+	chk.NoError(err)
+	chk.Equal(uint64(math.MaxInt32), U64)
+	//
+	err = set.V(&U8).To(uint64(math.MaxUint8))
+	chk.NoError(err)
+	chk.Equal(uint8(math.MaxUint8), U8)
+	err = set.V(&U8).To(uint64(math.MaxUint64))
+	chk.Error(err)
+	chk.Equal(uint8(0), U8)
 }
 
 func TestValueToFast(t *testing.T) {
