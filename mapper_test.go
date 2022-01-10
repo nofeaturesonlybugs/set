@@ -95,6 +95,93 @@ func TestMapper(t *testing.T) {
 	}
 }
 
+func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
+	chk := assert.New(t)
+	type Address struct {
+		Street string `t:"street"`
+		City   string `t:"city"`
+		State  string `t:"state"`
+		Zip    string `t:"zip"`
+		// Should be ignored.
+		Zoning string
+	}
+	type Person struct {
+		Name string `t:"name"`
+		Age  int    `t:"age"`
+		// Should be ignored
+		Occupation string
+		Address    `t:"address"`
+	}
+	values := map[string]string{
+		"name":       "Bob",
+		"age":        "42",
+		"Occupation": "Basket Weaving",
+		//
+		"address_street": "12345 Street",
+		"address_city":   "Small City",
+		"address_state":  "ST",
+		"address_zip":    "98765",
+		"address_Zoning": "residential",
+	}
+	{
+		m := &set.Mapper{
+			Join: "_",
+			Tags: []string{"t"},
+		}
+		p := &Person{}
+		b := m.Bind(p)
+		for k, v := range values {
+			b.Set(k, v)
+		}
+		chk.NoError(b.Err())
+		chk.Equal("Bob", p.Name)
+		chk.Equal(42, p.Age)
+		chk.Equal("Basket Weaving", p.Occupation)
+		//
+		chk.Equal("12345 Street", p.Address.Street)
+		chk.Equal("Small City", p.Address.City)
+		chk.Equal("ST", p.Address.State)
+		chk.Equal("98765", p.Address.Zip)
+		chk.Equal("residential", p.Address.Zoning)
+	}
+	{
+		m := &set.Mapper{
+			Join:             "_",
+			Tags:             []string{"t"},
+			TaggedFieldsOnly: true,
+		}
+		p := &Person{}
+		b := m.Bind(p)
+		//
+		occupation, zoning := values["Occupation"], values["address_Zoning"]
+		chk.Equal("Basket Weaving", occupation)
+		chk.Equal("residential", zoning)
+		delete(values, "Occupation")
+		delete(values, "address_Zoning")
+		//
+		for k, v := range values {
+			b.Set(k, v)
+		}
+		chk.NoError(b.Err())
+		chk.Equal("Bob", p.Name)
+		chk.Equal(42, p.Age)
+		chk.Equal("", p.Occupation)
+		//
+		chk.Equal("12345 Street", p.Address.Street)
+		chk.Equal("Small City", p.Address.City)
+		chk.Equal("ST", p.Address.State)
+		chk.Equal("98765", p.Address.Zip)
+		chk.Equal("", p.Address.Zoning)
+		//
+		err := b.Set("Occupation", occupation)
+		chk.Error(err)
+		chk.Equal("", p.Occupation)
+		err = b.Set("address_Zoning", zoning)
+		chk.Error(err)
+		chk.Equal("", p.Address.Zoning)
+	}
+}
+
 func TestMapper_Bind(t *testing.T) {
 	chk := assert.New(t)
 	//

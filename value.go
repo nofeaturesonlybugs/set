@@ -356,7 +356,6 @@ func (me *Value) Rebind(arg interface{}) {
 	}
 	me.original, me.TopValue = arg, v
 	me.WriteValue, me.CanWrite = Writable(v)
-	return
 }
 
 // Zero sets the Value to the Zero value of the appropriate type.

@@ -475,5 +475,7 @@ for k := 0; k < b.N; k++ {
 ## API Consistency and Breaking Changes  
 I am making a very concerted effort to break the API as little as possible while adding features or fixing bugs.  However this software is currently in a pre-1.0.0 version and breaking changes *are* allowed under standard semver.  As the API approaches a stable 1.0.0 release I will list any such breaking changes here and they will always be signaled by a bump in *minor* version.
 
+* 0.3.0 ⭢ x.y.z  
+  set.Mapper has new field TaggedFieldsOnly.  `TaggedFieldsOnly=false` means no change in behavior.  `TaggedFieldsOnly=true` means set.Mapper only maps exported fields with struct tags.
 * 0.2.3 ⭢ 0.3.0  
   set.BoundMapping.Assignables has a second argument allowing you to pre-allocate the slice that is returned; you can also set it to `nil` to keep current behavior.
