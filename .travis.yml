@@ -1,5 +1,9 @@
 language: go
 
+branches:
+  only:
+  - master
+
 go:
 - "1.14.x"
 - "1.15.x"

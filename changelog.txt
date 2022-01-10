@@ -1,5 +1,11 @@
 /develop
 
+0.4.0
+    + set.Mapper
+        + Add TaggedFieldsOnly field.
+            TaggedFieldsOnly=false means no change in behavior.
+            TaggedFieldsOnly=true means only exported fields with struct tags are mapped.
+            
 0.3.2
     + Bug fix.  set.V(&dst).To(src) would fail when dst and src represented the same class of data
         but with different bit sizes.  For example set.V(&i64).To(i8(12)) would return an error stating

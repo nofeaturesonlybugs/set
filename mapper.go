@@ -64,6 +64,11 @@ type Mapper struct {
 	//	[]string{ "db", "json" } // struct tag `db` used before struct tag `json`
 	Tags []string
 	//
+	// When TaggedFieldsOnly is true the Map() method only maps struct fields that have tags
+	// matching a value in the Tags field.  In other words exported tag-less struct fields are not
+	// mapped.
+	TaggedFieldsOnly bool
+	//
 	// Join specifies the string used to join generated names as nesting increases.
 	Join string
 	//
@@ -184,11 +189,11 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 				continue
 			}
 			//
-			name := ""
+			name, hadTag := "", false
 			if !me.Elevated.Has(fieldTypeInfo.Type) {
 				for _, tagName := range append(me.Tags, "") {
 					if tagValue, ok := field.Tag.Lookup(tagName); ok {
-						name = tagValue
+						name, hadTag = tagValue, true
 						break
 					} else if tagName == "" {
 						name = field.Name
@@ -199,6 +204,11 @@ func (me *Mapper) Map(T interface{}) *Mapping {
 					}
 				}
 			}
+			// When tagged fields are required but name was not set via tag.
+			if me.TaggedFieldsOnly && !hadTag {
+				continue
+			}
+			//
 			if prefix != "" && name != "" {
 				name = prefix + me.Join + name
 			} else if prefix != "" {
