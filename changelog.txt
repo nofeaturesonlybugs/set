@@ -1,5 +1,15 @@
 /develop
 
+    + Breaking change migration (impact=low)
+        BoundMapping is now a struct and no longer an interface type.
+
+    + Breaking change migration (impact=low)
+        Method receivers on type Mapping refactored to value-receivers instead of pointer-receivers.
+        None of the existing methods mutate the Mapping so this change should be low impact.
+
+    + Breaking change migration (impact=low)
+        Mapper.Map returns Mapping instead of *Mapping.
+
 0.4.0
     + set.Mapper
         + Add TaggedFieldsOnly field.
