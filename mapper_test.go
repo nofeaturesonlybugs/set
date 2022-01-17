@@ -405,8 +405,8 @@ func TestMapperBindCollision(t *testing.T) {
 
 func TestMapperCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
-	{ // Tests case where receiver is nil when calling Mapping.Lookup ~AND~ Mapping.String
-		var mapping *set.Mapping
+	{ // Tests case where mapper is empty when calling Mapping.Lookup ~AND~ Mapping.String
+		var mapping set.Mapping
 		_, ok := mapping.Lookup("Hi")
 		chk.Equal(false, ok)
 		s := mapping.String()
