@@ -8,7 +8,7 @@ import (
 
 // BoundMapping is returned from Mapper's Bind() method.
 //
-// Do not create BoundMapping types any other way.
+// A BoundMapping must not be copied except via its Copy method.
 type BoundMapping struct {
 	value *Value
 	err   error
@@ -122,14 +122,14 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 }
 
 // Rebind will replace the currently bound value with the new variable I.
-func (b BoundMapping) Rebind(I interface{}) {
+func (b *BoundMapping) Rebind(I interface{}) {
 	// ^^ me.value is a pointer so a value receiver is ok.
 	b.err = nil
 	b.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
-func (b BoundMapping) Set(field string, value interface{}) error {
+func (b *BoundMapping) Set(field string, value interface{}) error {
 	// nil check is not necessary as boundMapping is only created within this package.
 	indeces := b.indeces[field]
 	fieldValue, err := b.value.FieldByIndex(indeces)
