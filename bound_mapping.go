@@ -4,11 +4,29 @@ import (
 	"reflect"
 
 	"github.com/nofeaturesonlybugs/errors"
+
+	"github.com/nofeaturesonlybugs/set/path"
 )
 
 // BoundMapping is returned from Mapper's Bind() method.
 //
 // Do not create BoundMapping types any other way.
+//
+// BoundMappings should be used in iterative code that needs to read or mutate
+// many instances of the same struct.  BoundMappings allow for adhoc or indeterminate
+// field access within the bound data.
+//	// adhoc access means different fields can be accessed between calls to Rebind()
+//	var a, b T
+//
+//	bound := myMapper.Map(a)
+//	bound.Set("Field", 10)
+//	bound.Set("Other", "Hello")
+//
+//	bound.Rebind(b)
+//	bound.Set("Bar", 27)
+//
+// In the preceding example the BoundMapping is first bound to a and later bound to b
+// and each instance had different field(s) accessed.
 type BoundMapping struct {
 	value *Value
 	err   error
@@ -16,6 +34,9 @@ type BoundMapping struct {
 	// NB   indeces is obtained from Mapping.Indeces and is not a copy.
 	//      Treat as read only.
 	indeces map[string][]int
+	// NB	paths is obtained from Mapping.Paths and is not a copy.
+	//      Treat as read only.
+	paths map[string]path.Path
 }
 
 // Assignables returns a slice of interfaces by field names where each element is a pointer
@@ -122,23 +143,29 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 }
 
 // Rebind will replace the currently bound value with the new variable I.
-func (b BoundMapping) Rebind(I interface{}) {
-	// ^^ me.value is a pointer so a value receiver is ok.
+func (b *BoundMapping) Rebind(I interface{}) {
 	b.err = nil
 	b.value.Rebind(I)
 }
 
 // Set effectively sets V[field] = value.
-func (b BoundMapping) Set(field string, value interface{}) error {
-	// nil check is not necessary as boundMapping is only created within this package.
-	indeces := b.indeces[field]
-	fieldValue, err := b.value.FieldByIndex(indeces)
-	if err != nil {
-		if b.err == nil {
-			b.err = errors.Go(err)
-			return b.err
+func (b *BoundMapping) Set(field string, value interface{}) error {
+	var fieldValue reflect.Value
+	var err error
+
+	if FlagUsePaths {
+		path := b.paths[field]
+		fieldValue = path.Value(b.value.WriteValue)
+	} else {
+		indeces := b.indeces[field]
+		fieldValue, err = b.value.FieldByIndex(indeces)
+		if err != nil {
+			if b.err == nil {
+				b.err = errors.Go(err)
+				return b.err
+			}
+			return errors.Go(err)
 		}
-		return errors.Go(err)
 	}
 	//
 	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),

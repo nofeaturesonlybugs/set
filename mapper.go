@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nofeaturesonlybugs/set/path"
 )
 
 var mapperTreatAsScalar = map[reflect.Type]struct{}{
@@ -43,6 +45,10 @@ type Mapping struct {
 	// This field is provided as a convenience so you can map a struct and inspect
 	// field tags without having to use the reflect package yourself.
 	StructFields map[string]reflect.StructField
+
+	// Paths is a much more detailed repository of pathways in the struct
+	// hierarchy.  Paths can be used to more optimally traverse a struct.
+	Paths map[string]path.Path
 }
 
 // Mapper creates Mapping instances from structs and struct hierarchies.
@@ -108,11 +114,10 @@ var DefaultMapper = &Mapper{
 // Bind creates a BoundMapping that is initially bound to I.
 //
 // BoundMappings are provided for performance critical code that needs to
-// populate many instances of the same type repeatedly.  For example
-// populating a []T with data from a CSV file or database results.
-// Create a single BoundMapping and for each successive T call Rebind(t)
-// to bind the mapping to the next instance.  Then use the Set()
-// method to set data.
+// read or mutate many instances of the same type repeatedly without constraint
+// on field access between instances.
+//
+// See documentation for BoundMapping for more details.
 func (me *Mapper) Bind(I interface{}) BoundMapping {
 	var v *Value
 	if tv, ok := I.(*Value); ok {
@@ -126,7 +131,12 @@ func (me *Mapper) Bind(I interface{}) BoundMapping {
 		value:   v,
 		err:     nil,
 		indeces: mapping.Indeces,
+		paths:   mapping.Paths,
 	}
+	// fmt.Println(len(rv.paths), " paths") // TODO RM
+	// for key, path := range rv.paths { // TODO RM
+	// 	fmt.Printf("%10s  %v\n", key, path) // TODO RM
+	// } // TODO RM
 	return rv
 }
 
@@ -156,14 +166,26 @@ func (me *Mapper) Map(T interface{}) Mapping {
 		return *(rv.(*Mapping))
 	}
 	//
+	// Create a more formal mapping from subpackage path.
+	paths := path.Stat(typeInfo.Type)
+	//
 	rv := &Mapping{
 		Keys:         []string{},
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
+		Paths:        map[string]path.Path{},
 	}
 	//
-	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
-	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
+	// NB  fullpath is used to refer back into paths to obtain a path.Path for a mapped pathway.
+	//     Practically this is a bit slower than coalescing the logic of path.Stat into
+	//     this scan() function here.  Conceptually it's much easier to understand, support
+	//     and maintain.
+	var scan func(typeInfo TypeInfo, indeces []int, prefix string, fullpath string)
+	scan = func(typeInfo TypeInfo, indeces []int, prefix string, fullpath string) {
+		// Separate fullpath with underscore.
+		if fullpath != "" {
+			fullpath = fullpath + "_"
+		}
 		for k, field := range typeInfo.StructFields {
 			if field.PkgPath != "" {
 				continue
@@ -200,21 +222,46 @@ func (me *Mapper) Map(T interface{}) Mapping {
 			}
 			nameIndeces := append(indeces, k)
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				rv.Keys, rv.Indeces[name], rv.StructFields[name], rv.Paths[name] = append(rv.Keys, name), nameIndeces, field, paths.Leaves[fullpath+field.Name]
 			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				rv.Keys, rv.Indeces[name], rv.StructFields[name], rv.Paths[name] = append(rv.Keys, name), nameIndeces, field, paths.Leaves[fullpath+field.Name]
 			} else if fieldTypeInfo.IsStruct {
-				scan(fieldTypeInfo, nameIndeces, name)
+				scan(fieldTypeInfo, nameIndeces, name, fullpath+field.Name)
 			} else if fieldTypeInfo.IsScalar {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				rv.Keys, rv.Indeces[name], rv.StructFields[name], rv.Paths[name] = append(rv.Keys, name), nameIndeces, field, paths.Leaves[fullpath+field.Name]
 			}
 		}
 	}
 	// Scan and assign the result to our known types.
-	scan(typeInfo, []int{}, "")
+	scan(typeInfo, []int{}, "", "")
 	me.known.Store(typeInfo.Type, rv)
 	//
 	return *rv
+}
+
+// Prepare creates a PreparedMapping that is initially bound to I.
+//
+// PreparedMappings are provided for performance critical code that needs to
+// read or mutate many instances of the same type repeatedly and for every
+// instance the same fields will be accessed in the same order.
+//
+// See documentation for PreparedMapping for more details.
+func (me *Mapper) Prepare(I interface{}) PreparedMapping {
+	var v *Value
+	if tv, ok := I.(*Value); ok {
+		v = tv
+	} else {
+		v = V(I)
+	}
+	mapping := me.Map(v)
+	//
+	rv := PreparedMapping{
+		value:   v,
+		err:     nil,
+		indeces: mapping.Indeces,
+		paths:   mapping.Paths,
+	}
+	return rv
 }
 
 // Copy creates a copy of the Mapping.
@@ -223,10 +270,12 @@ func (me Mapping) Copy() Mapping {
 		Keys:         append([]string(nil), me.Keys...),
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
+		// TODO Paths:
 	}
 	for _, key := range me.Keys {
 		rv.Indeces[key] = append([]int(nil), me.Indeces[key]...)
 		rv.StructFields[key] = me.StructFields[key]
+		// TODO Copy rv.Paths
 	}
 	return rv
 }
@@ -252,5 +301,6 @@ func (me Mapping) String() string {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
 	}
 	sort.Strings(parts)
+	// TODO Paths?
 	return strings.Join(parts, "\n")
 }

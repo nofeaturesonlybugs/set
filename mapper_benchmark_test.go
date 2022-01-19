@@ -1794,7 +1794,7 @@ func BenchmarkMapperJsonUnmarshal(b *testing.B) {
 	rowsDecoded, size := loadBenchmarkMapperData(b)
 	var rows []string
 	for _, decoded := range rowsDecoded {
-		if encoded, err := json.MarshalIndent(decoded, "", "\t"); err != nil {
+		if encoded, err := json.Marshal(decoded); err != nil {
 			b.Fatalf("During json.Marshal: %v", err.Error())
 		} else {
 			rows = append(rows, string(encoded))
@@ -1980,6 +1980,88 @@ func BenchmarkMapperBoundMappingWithRebind(b *testing.B) {
 		bound.Set("Vendor_Contact_Last", row.VendorContactLast)
 		//
 		if err := bound.Err(); err != nil {
+			b.Fatalf("Unable to set: %v", err.Error())
+		}
+	}
+}
+
+func BenchmarkMapperPreparedMapping(b *testing.B) {
+	rows, size := loadBenchmarkMapperData(b)
+	//
+	type Common struct {
+		Id int
+	}
+	type Timestamps struct {
+		CreatedTime  string
+		ModifiedTime string
+	}
+	type Person struct {
+		Common
+		Timestamps // Not used but present anyways
+		First      string
+		Last       string
+	}
+	type Vendor struct {
+		Common
+		Timestamps  // Not used but present anyways
+		Name        string
+		Description string
+		Contact     Person
+	}
+	type T struct {
+		Common
+		Timestamps
+		//
+		Price    int
+		Quantity int
+		Total    int
+		//
+		Customer Person
+		Vendor   Vendor
+	}
+	//
+	b.ResetTimer()
+	//
+	mapper := &set.Mapper{
+		Elevated: set.NewTypeList(Common{}, Timestamps{}),
+		Join:     "_",
+	}
+	//
+	dest := new(T)
+	prepared := mapper.Prepare(&dest)
+	err := prepared.Plan(
+		"Id", "CreatedTime", "ModifiedTime",
+		"Price", "Quantity", "Total",
+		"Customer_Id", "Customer_First", "Customer_Last",
+		"Vendor_Id", "Vendor_Name", "Vendor_Description", "Vendor_Contact_Id", "Vendor_Contact_First", "Vendor_Contact_Last")
+	if err != nil {
+		b.Fatalf("error preparing plan %v", err.Error())
+	}
+	//
+	for k := 0; k < b.N; k++ {
+		row := rows[k%size]
+		dest = new(T)
+		prepared.Rebind(&dest)
+		//
+		prepared.Set(row.Id)
+		prepared.Set(row.CreatedTime)
+		prepared.Set(row.ModifiedTime)
+		prepared.Set(row.Price)
+		prepared.Set(row.Quantity)
+		prepared.Set(row.Total)
+		//
+		prepared.Set(row.CustomerId)
+		prepared.Set(row.CustomerFirst)
+		prepared.Set(row.CustomerLast)
+		//
+		prepared.Set(row.VendorId)
+		prepared.Set(row.VendorName)
+		prepared.Set(row.VendorDescription)
+		prepared.Set(row.VendorContactId)
+		prepared.Set(row.VendorContactFirst)
+		prepared.Set(row.VendorContactLast)
+		//
+		if err := prepared.Err(); err != nil {
 			b.Fatalf("Unable to set: %v", err.Error())
 		}
 	}
