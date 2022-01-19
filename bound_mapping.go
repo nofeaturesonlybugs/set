@@ -10,10 +10,10 @@ import (
 
 // BoundMapping is returned from Mapper's Bind() method.
 //
-// Do not create BoundMapping types any other way.
+// A BoundMapping must not be copied except via its Copy method.
 //
-// BoundMappings should be used in iterative code that needs to read or mutate
-// many instances of the same struct.  BoundMappings allow for adhoc or indeterminate
+// A BoundMapping should be used in iterative code that needs to read or mutate
+// many instances of the same struct.  Bound mappings allow for adhoc or indeterminate
 // field access within the bound data.
 //	// adhoc access means different fields can be accessed between calls to Rebind()
 //	var a, b T
@@ -154,8 +154,17 @@ func (b *BoundMapping) Set(field string, value interface{}) error {
 	var err error
 
 	if FlagUsePaths {
-		path := b.paths[field]
-		fieldValue = path.Value(b.value.WriteValue)
+		var p path.Path
+		var ok bool
+		if p, ok = b.paths[field]; !ok {
+			err = errors.Errorf("unknown field %v", field)
+			if b.err == nil {
+				b.err = err
+				return b.err
+			}
+			return err
+		}
+		fieldValue = p.Value(b.value.WriteValue)
 	} else {
 		indeces := b.indeces[field]
 		fieldValue, err = b.value.FieldByIndex(indeces)
