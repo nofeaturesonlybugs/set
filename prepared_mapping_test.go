@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/nofeaturesonlybugs/set"
 )
 
-func TestBoundMapping_Assignables(t *testing.T) {
+func TestPreparedMapping_Assignables(t *testing.T) {
 	Addr := func(p interface{}) string {
 		return fmt.Sprintf("%p", p)
 	}
@@ -69,14 +70,18 @@ func TestBoundMapping_Assignables(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			chk := assert.New(t)
 			//
-			b, err := set.DefaultMapper.Bind(test.V)
+			p, err := set.DefaultMapper.Prepare(test.V)
 			chk.NoError(err)
 			//
-			ptrs, err := b.Assignables(test.Fields, nil)
+			err = p.Plan(test.Fields...)
 			chk.ErrorIs(err, test.Error)
-			if test.Error == nil { // Do not expect error
+			//
+			ptrs, err := p.Assignables(nil)
+			chk.Equal(test.Expect, ptrs)
+			if errors.Is(test.Error, set.ErrUnknownField) {
+				chk.ErrorIs(err, set.ErrPlanInvalid)
+			} else {
 				chk.NoError(err)
-				chk.Equal(test.Expect, ptrs)
 				for k := range test.Expect {
 					chk.Equal(Addr(test.Expect[k]), Addr(ptrs[k]))
 				}
@@ -102,10 +107,13 @@ func TestBoundMapping_Assignables(t *testing.T) {
 			t.Run(test.Name, func(t *testing.T) {
 				chk := assert.New(t)
 				//
-				b, err := set.DefaultMapper.Bind(test.V)
+				p, err := set.DefaultMapper.Prepare(test.V)
 				chk.ErrorIs(err, set.ErrReadOnly)
 				//
-				_, err = b.Assignables(test.Fields, nil)
+				err = p.Plan(test.Fields...)
+				chk.ErrorIs(err, set.ErrReadOnly)
+				//
+				_, err = p.Assignables(nil)
 				chk.ErrorIs(err, set.ErrReadOnly)
 			})
 		}
@@ -143,9 +151,11 @@ func TestBoundMapping_Assignables(t *testing.T) {
 		// The second pass checks these are the correct values.
 		for k := 0; k < 4; k++ {
 			n := k % 2
-			bound, err := set.DefaultMapper.Bind(&data[n])
+			p, err := set.DefaultMapper.Prepare(&data[n])
 			chk.NoError(err)
-			ptrs, err := bound.Assignables([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
+			err = p.Plan([]string{"A_B", "A_A", "Field_A", "Field_B"}...)
+			chk.NoError(err)
+			ptrs, err := p.Assignables(nil)
 			chk.NoError(err)
 			chk.NotNil(ptrs)
 			chk.Equal(4, len(ptrs))
@@ -176,7 +186,7 @@ func TestBoundMapping_Assignables(t *testing.T) {
 	})
 }
 
-func TestBoundMapping_Copy(t *testing.T) {
+func TestPreparedMapping_Copy(t *testing.T) {
 	chk := assert.New(t)
 	//
 	type S struct {
@@ -186,21 +196,24 @@ func TestBoundMapping_Copy(t *testing.T) {
 	var first, copied S
 	var err error
 
-	b, err := set.DefaultMapper.Bind(&first)
+	p, err := set.DefaultMapper.Prepare(&first)
 	chk.NoError(err)
-	err = b.Set("A", "Hello")
+	err = p.Plan("A", "B")
 	chk.NoError(err)
-	chk.Nil(b.Err())
-	err = b.Set("B", 42)
-	chk.NoError(err)
-	chk.Nil(b.Err())
 
-	cp := b.Copy()
+	err = p.Set("Hello")
+	chk.NoError(err)
+	chk.Nil(p.Err())
+	err = p.Set(42)
+	chk.NoError(err)
+	chk.Nil(p.Err())
+
+	cp := p.Copy()
 	cp.Rebind(&copied)
-	err = cp.Set("A", "Copied!")
+	err = cp.Set("Copied!")
 	chk.NoError(err)
 	chk.Nil(cp.Err())
-	err = cp.Set("B", 100)
+	err = cp.Set(100)
 	chk.NoError(err)
 	chk.Nil(cp.Err())
 
@@ -210,43 +223,174 @@ func TestBoundMapping_Copy(t *testing.T) {
 	chk.Equal(100, copied.B)
 }
 
-func TestBoundMapping_Err(t *testing.T) {
+func TestPreparedMapping_Err(t *testing.T) {
 	chk := assert.New(t)
-	//
 	type S struct {
 		A int
 	}
 	mapper := &set.Mapper{}
 	var s, o S
-	var err, errOrig error
-	b, err := mapper.Bind(&s)
+	var err error
+	p, err := mapper.Prepare(&s)
+	chk.NoError(err)
+	err = p.Plan("A")
 	chk.NoError(err)
 
 	t.Run("err is set", func(t *testing.T) {
 		chk := assert.New(t)
 		//
-		err = b.Set("A", 42)
+		err = p.Set(42)
 		chk.NoError(err)
-		chk.Equal(err, b.Err())
-		err = b.Set("B", "does not exist")
-		chk.ErrorIs(err, set.ErrUnknownField)
-		chk.Equal(err, b.Err())
-		errOrig = err
-		err = b.Set("A", 48)
-		chk.NoError(err)
-		chk.Equal(errOrig, b.Err())
+		chk.Equal(err, p.Err())
+		// cause error
+		err = p.Set("does not exist")
+		chk.ErrorIs(err, set.ErrPlanExceeded)
+		chk.Equal(err, p.Err())
 	})
-
+	t.Run("plan clears error", func(t *testing.T) {
+		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		err = p.Plan("A") // Should clear error
+		chk.NoError(err)
+		chk.Nil(p.Err())
+		err = p.Set(48)
+		chk.NoError(err)
+		chk.Nil(p.Err())
+		// cause error
+		err = p.Set("does not exist")
+		chk.ErrorIs(err, set.ErrPlanExceeded)
+		chk.Equal(err, p.Err())
+	})
 	t.Run("rebind clears error", func(t *testing.T) {
 		chk := assert.New(t)
 		//
-		b.Rebind(&o)
-		chk.Nil(b.Err())
+		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		p.Rebind(&o)
+		chk.Nil(p.Err())
 	})
-
 }
 
-func TestBoundMapping_Fields(t *testing.T) {
+func TestPreparedMapping_Field(t *testing.T) {
+	type S struct {
+		A string
+		B int
+	}
+	type Nested struct {
+		S
+		Next S
+	}
+	var a, b S
+	var m, n Nested
+
+	var v *set.Value
+	var p set.PreparedMapping
+	var err error
+
+	t.Run("S", func(t *testing.T) {
+		chk := assert.New(t)
+		//
+		p, err = set.DefaultMapper.Prepare(&a)
+		chk.NoError(err)
+		err = p.Plan("B", "A")
+		chk.NoError(err)
+
+		v, err = p.Field()
+		chk.NoError(err)
+		v.To("42")
+		v, err = p.Field()
+		chk.NoError(err)
+		v.To("First")
+		v, err = p.Field()
+		chk.ErrorIs(err, set.ErrPlanExceeded)
+		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.Nil(v)
+
+		p.Rebind(&b)
+		chk.Nil(p.Err())
+		v, err = p.Field()
+		chk.NoError(err)
+		v.To("78")
+		v, err = p.Field()
+		chk.NoError(err)
+		v.To("Second")
+		v, err = p.Field()
+		chk.ErrorIs(err, set.ErrPlanExceeded)
+		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.Nil(v)
+
+		chk.Equal("First", a.A)
+		chk.Equal(42, a.B)
+		chk.Equal("Second", b.A)
+		chk.Equal(78, b.B)
+	})
+	//
+	t.Run("Nested", func(t *testing.T) {
+		chk := assert.New(t)
+		//
+		p, err = set.DefaultMapper.Prepare(&m)
+		chk.NoError(err)
+		err = p.Plan("Next_B", "Next_A", "S_A", "S_B")
+		chk.NoError(err)
+
+		v, _ = p.Field()
+		v.To(100)
+		v, _ = p.Field()
+		v.To("m.Next.A")
+		v, _ = p.Field()
+		v.To("m.S.A")
+		v, _ = p.Field()
+		v.To(10)
+		v, err = p.Field()
+		chk.ErrorIs(err, set.ErrPlanExceeded)
+		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+
+		p.Rebind(&n)
+		chk.Nil(p.Err())
+		v, _ = p.Field()
+		v.To(900)
+		v, _ = p.Field()
+		v.To("n.Next.A")
+		v, _ = p.Field()
+		v.To("n.S.A")
+		v, _ = p.Field()
+		v.To(90)
+		v, err = p.Field()
+
+		chk.Equal("m.S.A", m.S.A)
+		chk.Equal(10, m.S.B)
+		chk.Equal("m.Next.A", m.Next.A)
+		chk.Equal(100, m.Next.B)
+
+		chk.Equal("n.S.A", n.S.A)
+		chk.Equal(90, n.S.B)
+		chk.Equal("n.Next.A", n.Next.A)
+		chk.Equal(900, n.Next.B)
+	})
+	//
+	t.Run("readonly", func(t *testing.T) {
+		chk := assert.New(t)
+		//
+		p, err := set.DefaultMapper.Prepare(a)
+		chk.ErrorIs(err, set.ErrReadOnly)
+
+		err = p.Plan("A", "B")
+		chk.ErrorIs(err, set.ErrReadOnly)
+
+		_, err = p.Field()
+		chk.ErrorIs(err, set.ErrReadOnly)
+	})
+	//
+	t.Run("invalid", func(t *testing.T) {
+		chk := assert.New(t)
+		//
+		p, err := set.DefaultMapper.Prepare(&a)
+		chk.NoError(err)
+
+		_, err = p.Field()
+		chk.ErrorIs(err, set.ErrPlanInvalid)
+	})
+}
+
+func TestPreparedMapping_Fields(t *testing.T) {
 	type Test struct {
 		Name   string
 		V      interface{}
@@ -289,6 +433,7 @@ func TestBoundMapping_Fields(t *testing.T) {
 			Fields: []string{"B", "A"},
 			Expect: []interface{}{s.B, s.A},
 		},
+		// Nesting
 		{
 			Name:   "n one",
 			V:      &n,
@@ -313,16 +458,22 @@ func TestBoundMapping_Fields(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			chk := assert.New(t)
 			//
-			b, err := set.DefaultMapper.Bind(test.V)
+			p, err := set.DefaultMapper.Prepare(test.V)
 			chk.NoError(err)
 			//
-			values, err := b.Fields(test.Fields, nil)
+			err = p.Plan(test.Fields...)
 			chk.ErrorIs(err, test.Error)
-			if test.Error == nil { // Do not expect error
-				chk.Equal(test.Expect, values)
+			//
+			values, err := p.Fields(nil)
+			chk.Equal(test.Expect, values)
+			if errors.Is(test.Error, set.ErrUnknownField) {
+				chk.ErrorIs(err, set.ErrPlanInvalid)
+			} else {
+				chk.NoError(err)
 				for k := range test.Expect {
 					chk.Equal(test.Expect[k], values[k])
 				}
+
 			}
 		})
 	}
@@ -345,10 +496,13 @@ func TestBoundMapping_Fields(t *testing.T) {
 			t.Run(test.Name, func(t *testing.T) {
 				chk := assert.New(t)
 				//
-				b, err := set.DefaultMapper.Bind(test.V)
+				p, err := set.DefaultMapper.Prepare(test.V)
 				chk.ErrorIs(err, set.ErrReadOnly)
 				//
-				_, err = b.Fields(test.Fields, nil)
+				err = p.Plan(test.Fields...)
+				chk.ErrorIs(err, set.ErrReadOnly)
+				//
+				_, err = p.Fields(nil)
 				chk.ErrorIs(err, set.ErrReadOnly)
 			})
 		}
@@ -386,9 +540,11 @@ func TestBoundMapping_Fields(t *testing.T) {
 		// The second pass checks these are the correct values.
 		for k := 0; k < 4; k++ {
 			n := k % 2
-			bound, err := set.DefaultMapper.Bind(&data[n])
+			p, err := set.DefaultMapper.Prepare(&data[n])
 			chk.NoError(err)
-			values, err := bound.Fields([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
+			err = p.Plan([]string{"A_B", "A_A", "Field_A", "Field_B"}...)
+			chk.NoError(err)
+			values, err := p.Fields(nil)
 			chk.NoError(err)
 			chk.NotNil(values)
 			chk.Equal(4, len(values))

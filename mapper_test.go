@@ -129,7 +129,8 @@ func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
 			Tags: []string{"t"},
 		}
 		p := &Person{}
-		b := m.Bind(p)
+		b, err := m.Bind(p)
+		chk.NoError(err)
 		for k, v := range values {
 			b.Set(k, v)
 		}
@@ -151,7 +152,8 @@ func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
 			TaggedFieldsOnly: true,
 		}
 		p := &Person{}
-		b := m.Bind(p)
+		b, err := m.Bind(p)
+		chk.NoError(err)
 		//
 		occupation, zoning := values["Occupation"], values["address_Zoning"]
 		chk.Equal("Basket Weaving", occupation)
@@ -173,11 +175,11 @@ func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
 		chk.Equal("98765", p.Address.Zip)
 		chk.Equal("", p.Address.Zoning)
 		//
-		err := b.Set("Occupation", occupation)
-		chk.Error(err)
+		err = b.Set("Occupation", occupation)
+		chk.ErrorIs(err, set.ErrUnknownField)
 		chk.Equal("", p.Occupation)
 		err = b.Set("address_Zoning", zoning)
-		chk.Error(err)
+		chk.ErrorIs(err, set.ErrUnknownField)
 		chk.Equal("", p.Address.Zoning)
 	}
 }
@@ -200,8 +202,8 @@ func TestMapper_Bind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound := mapper.Bind(&data)
-		chk.NotNil(bound)
+		bound, err := mapper.Bind(&data)
+		chk.NoError(err)
 		//
 		field, err := bound.Field("Pk")
 		chk.NoError(err)
@@ -223,7 +225,7 @@ func TestMapper_Bind(t *testing.T) {
 		chk.Equal("updated", data.UpdatedTime)
 		//
 		field, err = bound.Field("NotFound")
-		chk.Error(err)
+		chk.ErrorIs(err, set.ErrUnknownField)
 		chk.Nil(field)
 	}
 	//
@@ -242,8 +244,8 @@ func TestMapper_Bind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound := mapper.Bind(&data)
-		chk.NotNil(bound)
+		bound, err := mapper.Bind(&data)
+		chk.NoError(err)
 		//
 		field, err := bound.Field("Pk")
 		chk.NoError(err)
@@ -265,7 +267,7 @@ func TestMapper_Bind(t *testing.T) {
 		chk.Equal("updated", data.UpdatedTime)
 		//
 		field, err = bound.Field("NotFound")
-		chk.Error(err)
+		chk.ErrorIs(err, set.ErrUnknownField)
 		chk.Nil(field)
 	}
 }
@@ -289,10 +291,10 @@ func TestMapper_Bind_Rebind(t *testing.T) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(CommonDb{}),
 		}
-		bound := mapper.Bind(&a)
-		chk.NotNil(bound)
+		bound, err := mapper.Bind(&a)
+		chk.NoError(err)
 		//
-		err := bound.Set("Pk", 10)
+		err = bound.Set("Pk", 10)
 		chk.NoError(err)
 		chk.Equal(10, a.Pk)
 		//
@@ -313,60 +315,6 @@ func TestMapper_Bind_Rebind(t *testing.T) {
 			bound.Rebind(&other)
 		}()
 		chk.Equal(true, didPanic)
-	}
-}
-
-func TestBoundMappingSetFast(t *testing.T) {
-	chk := assert.New(t)
-	type T struct {
-		B   bool
-		I   int
-		I8  int8
-		I16 int16
-		I32 int32
-		I64 int64
-		U   uint
-		U8  uint8
-		U16 uint16
-		U32 uint32
-		U64 uint64
-		F32 float32
-		F64 float64
-		S   string
-	}
-	{
-		var t T
-		bound := set.DefaultMapper.Bind(&t)
-		bound.Set("B", true)
-		bound.Set("I", int(-42))
-		bound.Set("I8", int8(-8))
-		bound.Set("I16", int16(-16))
-		bound.Set("I32", int32(-32))
-		bound.Set("I64", int64(-64))
-		bound.Set("U", uint(42))
-		bound.Set("U8", uint8(8))
-		bound.Set("U16", uint16(16))
-		bound.Set("U32", uint32(32))
-		bound.Set("U64", uint64(64))
-		bound.Set("F32", float32(3.14))
-		bound.Set("F64", float64(6.28))
-		bound.Set("S", "string")
-		err := bound.Err()
-		chk.NoError(err)
-		chk.Equal(true, t.B)
-		chk.Equal(-42, t.I)
-		chk.Equal(int8(-8), t.I8)
-		chk.Equal(int16(-16), t.I16)
-		chk.Equal(int32(-32), t.I32)
-		chk.Equal(int64(-64), t.I64)
-		chk.Equal(uint(42), t.U)
-		chk.Equal(uint8(8), t.U8)
-		chk.Equal(uint16(16), t.U16)
-		chk.Equal(uint32(32), t.U32)
-		chk.Equal(uint64(64), t.U64)
-		chk.Equal(float32(3.14), t.F32)
-		chk.Equal(float64(6.28), t.F64)
-		chk.Equal("string", t.S)
 	}
 }
 
@@ -393,10 +341,11 @@ func TestMapperBindCollision(t *testing.T) {
 			Elevated: set.NewTypeList(Db{}),
 			Join:     "_",
 		}
-		bound := mapper.Bind(&t)
+		bound, err := mapper.Bind(&t)
+		chk.NoError(err)
 		bound.Set("A_Id", "15")
 		bound.Set("B_Id", 25)
-		err := bound.Err()
+		err = bound.Err()
 		chk.NoError(err)
 		chk.Equal(15, t.A.Id)
 		chk.Equal(25, t.B.Id)
@@ -450,10 +399,10 @@ func TestMapperCodeCoverage(t *testing.T) {
 	}
 	{ // Tests BoundMapping when value V is not a struct.
 		var b bool
-		bound := set.DefaultMapper.Bind(&b)
-		chk.NotNil(bound)
-		err := bound.Set("Huh", false)
-		chk.Error(err)
+		bound, err := set.DefaultMapper.Bind(&b)
+		chk.NoError(err)
+		err = bound.Set("Huh", false)
+		chk.ErrorIs(err, set.ErrUnknownField)
 	}
 	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapping.Rebind when value is already a *set.Value
 		type T struct {
@@ -461,18 +410,18 @@ func TestMapperCodeCoverage(t *testing.T) {
 		}
 		var t, u T
 		vt, vu := set.V(&t), set.V(&u)
-		bound := set.DefaultMapper.Bind(vt)
-		chk.NotNil(bound)
+		bound, err := set.DefaultMapper.Bind(vt)
+		chk.NoError(err)
 		bound.Rebind(vu)
 	}
 	{ // Tests BoundMapping.Set when the underlying set can not be performed.
 		type A struct {
 			I int
 		}
-		bound := set.DefaultMapper.Bind(&A{})
-		chk.NotNil(bound)
-		err := bound.Set("I", "Hello, World!")
-		chk.Error(err)
+		bound, err := set.DefaultMapper.Bind(&A{})
+		chk.NoError(err)
+		err = bound.Set("I", "Hello, World!")
+		chk.Error(err) // TODO Want to check for a specific error type; requires Value.To() to be updated.
 	}
 	{ // Tests Mapper.Map for structs inherently treated as scalars, such as time.Time and *time.Time
 		type T struct {
@@ -488,210 +437,6 @@ func TestMapperCodeCoverage(t *testing.T) {
 		field, ok = mapping.Lookup("PTime")
 		chk.Equal(true, ok)
 		chk.NotNil(field)
-	}
-}
-
-func TestBoundMappingAssignables(t *testing.T) {
-	chk := assert.New(t)
-	{ // Tests BoundMapping.Assignables
-		type A struct {
-			A string
-			B string
-		}
-		data := []A{{}, {}}
-		for k := 0; k < len(data); k++ {
-			bound := set.DefaultMapper.Bind(&data[k])
-			chk.NotNil(bound)
-			assignables, err := bound.Assignables([]string{"B", "A"}, nil)
-			chk.NoError(err)
-			chk.NotNil(assignables)
-			chk.Equal(2, len(assignables))
-			chk.Equal(fmt.Sprintf("%p", &data[k].B), fmt.Sprintf("%p", assignables[0]))
-			chk.Equal(fmt.Sprintf("%p", &data[k].A), fmt.Sprintf("%p", assignables[1]))
-			chk.Equal(&data[k].B, assignables[0])
-			chk.Equal(&data[k].A, assignables[1])
-			//
-			assignables, err = bound.Assignables([]string{"b", "b"}, nil)
-			chk.Error(err)
-			chk.Nil(assignables)
-			chk.Equal(0, len(assignables))
-		}
-	}
-	{ // Test when bound data is not writable.
-		type A struct {
-			A string
-			B string
-		}
-		data := A{}
-		bound := set.DefaultMapper.Bind(data)
-		chk.NotNil(bound)
-		assignables, err := bound.Assignables([]string{"B", "A"}, nil)
-		chk.Error(err)
-		chk.Nil(assignables)
-		chk.Equal(0, len(assignables))
-	}
-	{ // Test pointers for nested/embedded structs instantiated along the way.
-		type A struct {
-			A string
-			B string
-		}
-		type T struct {
-			*A
-			Field *A
-		}
-		data := []T{{}, {}}
-		for k := 0; k < len(data); k++ {
-			bound := set.DefaultMapper.Bind(&data[k])
-			chk.NotNil(bound)
-			assignables, err := bound.Assignables([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
-			chk.NoError(err)
-			chk.NotNil(assignables)
-			chk.Equal(4, len(assignables))
-			// embedded + field
-			e, f := data[k].A, data[k].Field
-			chk.Equal(fmt.Sprintf("%p", &e.B), fmt.Sprintf("%p", assignables[0]))
-			chk.Equal(fmt.Sprintf("%p", &e.A), fmt.Sprintf("%p", assignables[1]))
-			chk.Equal(fmt.Sprintf("%p", &f.A), fmt.Sprintf("%p", assignables[2]))
-			chk.Equal(fmt.Sprintf("%p", &f.B), fmt.Sprintf("%p", assignables[3]))
-			//
-			chk.Equal(&e.B, assignables[0])
-			chk.Equal(&e.A, assignables[1])
-			chk.Equal(&f.A, assignables[2])
-			chk.Equal(&f.B, assignables[3])
-		}
-	}
-}
-
-func TestBoundMappingCopy(t *testing.T) {
-	chk := assert.New(t)
-	//
-	type A struct {
-		A string
-		B string
-	}
-	var b1, b2 set.BoundMapping
-	data := []A{{"a1", "b1"}, {"a2", "b2"}}
-	for k := 0; k < len(data); k++ {
-		b1 = set.DefaultMapper.Bind(&data[k])
-		chk.NotNil(b1)
-		fields, err := b1.Fields([]string{"B", "A"}, nil)
-		chk.NoError(err)
-		chk.NotNil(fields)
-		chk.Equal(2, len(fields))
-		chk.Equal(data[k].B, fields[0])
-		chk.Equal(data[k].A, fields[1])
-		//
-		fields, err = b1.Assignables([]string{"b", "b"}, nil)
-		chk.Error(err)
-		chk.Nil(fields)
-		chk.Equal(0, len(fields))
-	}
-	//
-	b2 = b1.Copy()
-	chk.NotNil(b2)
-	for k := 0; k < len(data); k++ {
-		b2.Rebind(&data[k])
-		fields, err := b2.Fields([]string{"B", "A"}, nil)
-		chk.NoError(err)
-		chk.NotNil(fields)
-		chk.Equal(2, len(fields))
-		chk.Equal(data[k].B, fields[0])
-		chk.Equal(data[k].A, fields[1])
-		//
-		fields, err = b2.Assignables([]string{"b", "b"}, nil)
-		chk.Error(err)
-		chk.Nil(fields)
-		chk.Equal(0, len(fields))
-	}
-}
-
-func TestBoundMappingFields(t *testing.T) {
-	chk := assert.New(t)
-	{ // Tests BoundMapping.Fields
-		type A struct {
-			A string
-			B string
-		}
-		data := []A{{"a1", "b1"}, {"a2", "b2"}}
-		for k := 0; k < len(data); k++ {
-			bound := set.DefaultMapper.Bind(&data[k])
-			chk.NotNil(bound)
-			fields, err := bound.Fields([]string{"B", "A"}, nil)
-			chk.NoError(err)
-			chk.NotNil(fields)
-			chk.Equal(2, len(fields))
-			chk.Equal(data[k].B, fields[0])
-			chk.Equal(data[k].A, fields[1])
-			//
-			fields, err = bound.Fields([]string{"b", "b"}, nil)
-			chk.Error(err)
-			chk.Nil(fields)
-			chk.Equal(0, len(fields))
-		}
-	}
-	{ // Test when bound data is not writable.
-		type A struct {
-			A string
-			B string
-		}
-		data := A{}
-		bound := set.DefaultMapper.Bind(data)
-		chk.NotNil(bound)
-		fields, err := bound.Fields([]string{"B", "A"}, nil)
-		chk.Error(err)
-		chk.Nil(fields)
-		chk.Equal(0, len(fields))
-	}
-	{ // Test when unknown field is requested.
-		type A struct {
-			A string
-			B string
-		}
-		data := A{}
-		bound := set.DefaultMapper.Bind(&data)
-		chk.NotNil(bound)
-		fields, err := bound.Fields([]string{"BB", "A"}, nil)
-		chk.Error(err)
-		chk.Nil(fields)
-		chk.Equal(0, len(fields))
-	}
-	{ // Test pointers for nested/embedded structs instantiated along the way.
-		type A struct {
-			A string
-			B string
-		}
-		type T struct {
-			*A
-			Field *A
-		}
-		data := []T{{}, {}}
-		for k := 0; k < len(data); k++ {
-			bound := set.DefaultMapper.Bind(&data[k])
-			chk.NotNil(bound)
-			fields, err := bound.Fields([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
-			chk.NoError(err)
-			chk.NotNil(fields)
-			chk.Equal(4, len(fields))
-			// embedded + field
-			e, f := data[k].A, data[k].Field
-			chk.Equal(e.B, fields[0])
-			chk.Equal(e.A, fields[1])
-			chk.Equal(f.A, fields[2])
-			chk.Equal(f.B, fields[3])
-			//
-			data[k].A.A = fmt.Sprintf("a%v", k)
-			data[k].A.B = fmt.Sprintf("b%v", k)
-			data[k].Field.A = fmt.Sprintf("field.a%v", k)
-			data[k].Field.B = fmt.Sprintf("field.b%v", k)
-			fields, err = bound.Fields([]string{"A_B", "A_A", "Field_A", "Field_B"}, nil)
-			chk.NoError(err)
-			chk.NotNil(fields)
-			chk.Equal(4, len(fields))
-			chk.Equal(data[k].A.B, fields[0])
-			chk.Equal(data[k].A.A, fields[1])
-			chk.Equal(data[k].Field.A, fields[2])
-			chk.Equal(data[k].Field.B, fields[3])
-		}
 	}
 }
 
@@ -815,7 +560,10 @@ func ExampleMapper_Bind() {
 	mapper := &set.Mapper{
 		Elevated: set.NewTypeList(CommonDb{}),
 	}
-	bound := mapper.Bind(&data[0])
+	bound, err := mapper.Bind(&data[0])
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 	bound.Set("Pk", 10)
 	bound.Set("CreatedTime", "-5h")
 	bound.Set("UpdatedTime", "-2h")
@@ -858,7 +606,10 @@ func ExampleBoundMapping() {
 		Transform: strings.ToLower,
 	}
 	var people []Person
-	bound := mapper.Bind(&Person{})
+	bound, err := mapper.Bind(&Person{})
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 	for _, m := range values {
 		person := Person{}
 		bound.Rebind(&person)

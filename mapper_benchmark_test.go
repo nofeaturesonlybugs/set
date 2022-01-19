@@ -102,11 +102,15 @@ func BenchmarkMapper(b *testing.B) {
 		var bound set.BoundMapping
 		var row MapperBenchmarkJsonRow
 		var k int
+		var err error
 		dest := make([]T, 100)
 		for n := 0; n < b.N; n++ {
 			k = n % size
 			row = rowsDecoded[k]
-			bound = mapper.Bind(&dest[k])
+			bound, err = mapper.Bind(&dest[k])
+			if err != nil {
+				b.Fatalf("Unable to bind: %v", err.Error())
+			}
 			//
 			bound.Set("Id", row.Id)
 			bound.Set("CreatedTime", row.CreatedTime)
@@ -141,7 +145,10 @@ func BenchmarkMapper(b *testing.B) {
 		var row MapperBenchmarkJsonRow
 		var k int
 		dest := make([]T, 100)
-		bound := mapper.Bind(&dest[0])
+		bound, err := mapper.Bind(&dest[0])
+		if err != nil {
+			b.Fatalf("Unable to bind: %v", err.Error())
+		}
 		for n := 0; n < b.N; n++ {
 			k = n % size
 			row = rowsDecoded[k]
@@ -180,8 +187,11 @@ func BenchmarkMapper(b *testing.B) {
 		var row MapperBenchmarkJsonRow
 		var k int
 		dest := make([]T, 100)
-		prepared := mapper.Prepare(&dest[0])
-		err := prepared.Plan(
+		prepared, err := mapper.Prepare(&dest[0])
+		if err != nil {
+			b.Fatalf("error preparing %v", err.Error())
+		}
+		err = prepared.Plan(
 			"Id", "CreatedTime", "ModifiedTime",
 			"Price", "Quantity", "Total",
 			"Customer_Id", "Customer_First", "Customer_Last",
@@ -267,133 +277,5 @@ func BenchmarkMapperBaseline(b *testing.B) {
 		dest.Vendor.Contact.Id = row.VendorContactId
 		dest.Vendor.Contact.First = row.VendorContactFirst
 		dest.Vendor.Contact.Last = row.VendorContactLast
-		// TODO RM
-		// if err := bound.Err(); err != nil {
-		// 	b.Fatalf("Unable to set: %v", err.Error())
-		// }
 	}
 }
-
-// TODO RM
-// func BenchmarkValue(b *testing.B) { // TODO MOVE TO DIFFERENT FILE
-// 	type Common struct {
-// 		Id int
-// 	}
-// 	type Timestamps struct {
-// 		CreatedTime  string
-// 		ModifiedTime string
-// 	}
-// 	type Person struct {
-// 		*Common
-// 		*Timestamps // Not used but present anyways
-// 		First       string
-// 		Last        string
-// 	}
-// 	type Vendor struct {
-// 		*Common
-// 		*Timestamps // Not used but present anyways
-// 		Name        string
-// 		Description string
-// 		Contact     Person
-// 	}
-// 	type T struct {
-// 		*Common
-// 		*Timestamps
-// 		dest.Id = row.Id
-// 		dest.CreatedTime = row.CreatedTime
-// 		dest.ModifiedTime = row.ModifiedTime
-// 		dest.Price = row.Price
-// 		dest.Quantity = row.Quantity
-// 		dest.Total = row.Total
-// 		//
-// 		dest.Customer.Id = row.CustomerId
-// 		dest.Customer.First = row.CustomerFirst
-// 		dest.Customer.Last = row.CustomerLast
-// 		//
-// 		dest.Vendor.Id = row.VendorId
-// 		dest.Vendor.Name = row.VendorName
-// 		dest.Vendor.Description = row.VendorDescription
-// 		dest.Vendor.Contact.Id = row.VendorContactId
-// 		dest.Vendor.Contact.First = row.VendorContactFirst
-// 		dest.Vendor.Contact.Last = row.VendorContactLast
-// 	}
-// }
-
-// TODO RM
-// func BenchmarkMapperPreparedMapping(b *testing.B) {
-// 	rows, size := loadBenchmarkMapperData(b)
-// 	//
-// 	type Common struct {
-// 		Id int
-// 	}
-// 	type Timestamps struct {
-// 		CreatedTime  string
-// 		ModifiedTime string
-// 	}
-// 	type Person struct {
-// 		Common
-// 		Timestamps // Not used but present anyways
-// 		First      string
-// 		Last       string
-// 	}
-// 	type Vendor struct {
-// 		Common
-// 		Timestamps  // Not used but present anyways
-// 		Name        string
-// 		Description string
-// 		Contact     Person
-// 	}
-// 	type T struct {
-// 		Common
-// 		Timestamps
-// 		//
-// 		Price    int
-// 		Quantity int
-// 		Total    int
-// 		//
-// 		Customer Person
-// 		Vendor   Vendor
-// 	}
-// 	//
-// 	b.ResetTimer()
-// 	//
-// 	//
-// 	dest := new(T)
-// 	prepared := mapper.Prepare(&dest)
-// 	err := prepared.Plan(
-// 		"Id", "CreatedTime", "ModifiedTime",
-// 		"Price", "Quantity", "Total",
-// 		"Customer_Id", "Customer_First", "Customer_Last",
-// 		"Vendor_Id", "Vendor_Name", "Vendor_Description", "Vendor_Contact_Id", "Vendor_Contact_First", "Vendor_Contact_Last")
-// 	if err != nil {
-// 		b.Fatalf("error preparing plan %v", err.Error())
-// 	}
-// 	//
-// 	for k := 0; k < b.N; k++ {
-// 		row := rows[k%size]
-// 		dest = new(T)
-// 		prepared.Rebind(&dest)
-// 		//
-// 		prepared.Set(row.Id)
-// 		prepared.Set(row.CreatedTime)
-// 		prepared.Set(row.ModifiedTime)
-// 		prepared.Set(row.Price)
-// 		prepared.Set(row.Quantity)
-// 		prepared.Set(row.Total)
-// 		//
-// 		prepared.Set(row.CustomerId)
-// 		prepared.Set(row.CustomerFirst)
-// 		prepared.Set(row.CustomerLast)
-// 		//
-// 		prepared.Set(row.VendorId)
-// 		prepared.Set(row.VendorName)
-// 		prepared.Set(row.VendorDescription)
-// 		prepared.Set(row.VendorContactId)
-// 		prepared.Set(row.VendorContactFirst)
-// 		prepared.Set(row.VendorContactLast)
-// 		//
-// 		if err := prepared.Err(); err != nil {
-// 			b.Fatalf("Unable to set: %v", err.Error())
-// 		}
-// 	}
-// }

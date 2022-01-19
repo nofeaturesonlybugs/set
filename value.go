@@ -7,6 +7,13 @@ import (
 	"github.com/nofeaturesonlybugs/errors"
 )
 
+var (
+	// ErrReadOnly is returned by methods requring writable access to a variable but it was not
+	// passed by address and is readonly.  It is commonly wrapped with a %T verb to describe the
+	// type that was passed.
+	ErrReadOnly = fmt.Errorf("set: value is readonly; pass by address")
+)
+
 // V returns a new Value.
 //
 // Memory is possibly created when calling this function:

@@ -1,14 +1,35 @@
 /develop
 
-    + Breaking change migration (impact=low)
-        BoundMapping is now a struct and no longer an interface type.
-
-    + Breaking change migration (impact=low)
+    + Breaking change (impact=low)
+        Mapper.Map returns Mapping instead of *Mapping.
+    
+    + Breaking change (impact=low)
         Method receivers on type Mapping refactored to value-receivers instead of pointer-receivers.
         None of the existing methods mutate the Mapping so this change should be low impact.
 
-    + Breaking change migration (impact=low)
-        Mapper.Map returns Mapping instead of *Mapping.
+    + Breaking change (impact=low)
+        BoundMapping is now a struct and no longer an interface type.
+        Migration steps:
+            Probably none.
+        Reason:
+            When BoundMapping as an interface was originally created I envisioned multiple
+            such mapping types that would provide different kinds of struct access.  However it has
+            become apparent that:
+                1) Not many such types have been warranted or needed and
+                2) PreparedMapping -- the closest type to warrant such an interface -- does not have
+                    a method set matching BoundMapping.
+
+    + Breaking change (impact=high)
+        Mapper.Bind returns (BoundMapping, error) instead of BoundMapping.
+        Migration steps:
+            Existing code calling Mapper.Bind should now check the returned error value and
+            discard or abandon the use of the BoundMapping if err is non-nil.
+        Reason:
+            The previous version of set allowed Mapper.Bind to be called with an unaddressable
+            value which would result in all (or most) methods on BoundMapping to return an error.
+            Changing the Mapper.Bind signature allows this checking to be performed when
+            a BoundMapping is being created and lessens the burden on BoundMapping methods from
+            performing this check and returning the proper error.
 
 0.4.0
     + set.Mapper

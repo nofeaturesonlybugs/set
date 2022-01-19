@@ -1,14 +1,12 @@
 package set
 
 import (
+	"fmt"
 	"reflect"
-
-	"github.com/nofeaturesonlybugs/errors"
-
-	"github.com/nofeaturesonlybugs/set/path"
+	"time"
 )
 
-// BoundMapping is returned from Mapper's Bind() method.
+// BoundMapping is returned from Mapper's Bind method.
 //
 // A BoundMapping must not be copied except via its Copy method.
 //
@@ -18,73 +16,82 @@ import (
 //	// adhoc access means different fields can be accessed between calls to Rebind()
 //	var a, b T
 //
-//	bound := myMapper.Map(a)
+//	bound := myMapper.Map(&a)
 //	bound.Set("Field", 10)
 //	bound.Set("Other", "Hello")
 //
-//	bound.Rebind(b)
+//	bound.Rebind(&b)
 //	bound.Set("Bar", 27)
 //
 // In the preceding example the BoundMapping is first bound to a and later bound to b
 // and each instance had different field(s) accessed.
 type BoundMapping struct {
-	value *Value
+	// top is the original type used to create the value; it is needed to ensure type compatibility
+	// when calling Rebind.
+	// value is the bound value after passing through Writable to get to the end of any pointer chain.
+	top   reflect.Type
+	value reflect.Value
 	err   error
 
 	// NB   indeces is obtained from Mapping.Indeces and is not a copy.
 	//      Treat as read only.
 	indeces map[string][]int
-	// NB	paths is obtained from Mapping.Paths and is not a copy.
-	//      Treat as read only.
-	paths map[string]path.Path
+
+	// hasPointers=true means pathways exist in the bound value with pointers to instantiate.
+	hasPointers bool
 }
 
-// Assignables returns a slice of interfaces by field names where each element is a pointer
-// to the field in the bound variable.
+// Assignables returns a slice of pointers to the fields in the currently bound struct
+// in the order specified by the fields argument.
 //
-// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
-// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
-// and the lengths are not checked, meaning your program could panic.
+// To alleviate pressure on the garbage collector the return slice can be pre-allocated and
+// passed as the second argument to Assignables.  If non-nil it is assumed len(fields) == len(rv)
+// and failure to provide an appropriately sized non-nil slice will cause a panic.
 //
-// During traversal this method will instantiate struct fields that are themselves structs.
+// During traversal this method will allocate struct fields that are nil pointers.
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
 func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
-	if !b.value.CanWrite {
-		return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
+	if b.err == ErrReadOnly {
+		return rv, b.err
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
 	}
-	for fieldnum, name := range fields {
-		indeces := b.indeces[name]
-		if len(indeces) == 0 {
-			return nil, errors.Errorf("No mapping for field [%v]", name)
+	for fieldN, name := range fields {
+		index := b.indeces[name]
+		if len(index) == 0 {
+			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
 		}
-		v := b.value.WriteValue
-		for k, size := 0, len(indeces); k < size; k++ {
-			n := indeces[k] // n is the specific FieldIndex into v
-			if k < size-1 {
+		final := len(index) - 1 // The final index
+		v := b.value
+		for k, n := range index {
+			if b.hasPointers && k < final {
 				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
 				v, _ = Writable(v.Field(n))
 			} else {
 				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
-				rv[fieldnum] = v.Field(n).Addr().Interface()
+				v = v.Field(n)
 			}
 		}
+		rv[fieldN] = v.Addr().Interface()
 	}
 	return rv, nil
 }
 
-// Copy creates an exact copy of the BoundMapping.  Since a BoundMapping is implicitly tied to a single
-// value sometimes it may be useful to create and cache a BoundMapping early in a program's initialization and
-// then call Copy() to work with multiple instances of bound values simultaneously.
+// Copy creates an exact copy of the BoundMapping.
+//
+// One use case for Copy is to create a set of BoundMappings early in a program's
+// init phase.  During later execution when a BoundMapping is needed for type T
+// it can be obtained by calling Copy on the cached BoundMapping for that type.
 func (b BoundMapping) Copy() BoundMapping {
 	return BoundMapping{
-		value: b.value.Copy(),
-		err:   b.err,
-		// NB   Don't need to copy me.mapping since we never alter it.
+		top:         b.top,
+		value:       b.value,
+		err:         b.err,
+		hasPointers: b.hasPointers,
+		// NB   indeces is read-only in this type so copying not necessary.
 		indeces: b.indeces,
 	}
 }
@@ -97,46 +104,96 @@ func (b BoundMapping) Err() error {
 
 // Field returns the *Value for field.
 func (b BoundMapping) Field(field string) (*Value, error) {
-	var v reflect.Value
-	var err error
-	if v, err = b.value.FieldByIndex(b.indeces[field]); err != nil {
-		return nil, errors.Go(err)
+	if b.err == ErrReadOnly {
+		return nil, b.err
+	}
+	index := b.indeces[field]
+	if len(index) == 0 {
+		return nil, fmt.Errorf("%w: %v", ErrUnknownField, field)
+	}
+	final := len(index) - 1 // The final index
+	v := b.value
+	for k, n := range index {
+		if b.hasPointers && k < final {
+			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
+			v, _ = Writable(v.Field(n))
+		} else {
+			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+			v = v.Field(n)
+		}
 	}
 	return V(v), nil
 }
 
-// Fields returns a slice of interfaces by field names where each element is the field value.
+// Fields returns a slice of values to the fields in the currently bound struct in the order
+// specified by the fields argument.
 //
-// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
-// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
-// and the lengths are not checked, meaning your program might panic if rv is not the correct length.
+// To alleviate pressure on the garbage collector the return slice can be pre-allocated and
+// passed as the second argument to Fields.  If non-nil it is assumed len(fields) == len(rv)
+// and failure to provide an appropriately sized non-nil slice will cause a panic.
 //
-// During traversal this method will instantiate struct fields that are themselves structs.
+// During traversal this method will allocate struct fields that are nil pointers.
 //
 // An example use-case would be obtaining a slice of query arguments by column name during
 // database queries.
 func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
-	if !b.value.CanWrite {
-		return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
+	if b.err == ErrReadOnly {
+		return rv, b.err
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
 	}
-	for fieldnum, name := range fields {
-		indeces := b.indeces[name]
-		if len(indeces) == 0 {
-			return nil, errors.Errorf("No mapping for field [%v]", name)
+	for fieldN, name := range fields {
+		index := b.indeces[name]
+		if len(index) == 0 {
+			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
 		}
-		v := b.value.WriteValue
-		for k, size := 0, len(indeces); k < size; k++ {
-			n := indeces[k] // n is the specific FieldIndex into v
-			if k < size-1 {
+		final := len(index) - 1 // The final index
+		v := b.value
+		for k, n := range index {
+			if b.hasPointers && k < final {
 				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
 				v, _ = Writable(v.Field(n))
 			} else {
 				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
-				rv[fieldnum] = v.Field(n).Interface()
+				v = v.Field(n)
 			}
+		}
+		// NB  The value we want is v.Interface() which performs a number of allocations for built-in primitives.
+		//     If we switch off v's type as a pointer and it is a primitive we can skip the allocations.
+		switch ptr := v.Addr().Interface().(type) {
+		case *bool:
+			rv[fieldN] = *ptr
+		case *int:
+			rv[fieldN] = *ptr
+		case *int8:
+			rv[fieldN] = *ptr
+		case *int16:
+			rv[fieldN] = *ptr
+		case *int32:
+			rv[fieldN] = *ptr
+		case *int64:
+			rv[fieldN] = *ptr
+		case *uint:
+			rv[fieldN] = *ptr
+		case *uint8:
+			rv[fieldN] = *ptr
+		case *uint16:
+			rv[fieldN] = *ptr
+		case *uint32:
+			rv[fieldN] = *ptr
+		case *uint64:
+			rv[fieldN] = *ptr
+		case *float32:
+			rv[fieldN] = *ptr
+		case *float64:
+			rv[fieldN] = *ptr
+		case *string:
+			rv[fieldN] = *ptr
+		case *time.Time:
+			rv[fieldN] = *ptr
+		default:
+			rv[fieldN] = v.Interface()
 		}
 	}
 	return rv, nil
@@ -144,93 +201,98 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 
 // Rebind will replace the currently bound value with the new variable I.
 func (b *BoundMapping) Rebind(I interface{}) {
+	if b.err == ErrReadOnly {
+		return
+	}
+	T := reflect.TypeOf(I)
+	if b.top != T {
+		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", b.value.Interface(), I)) // TODO ErrRebind maybe?
+	}
 	b.err = nil
-	b.value.Rebind(I)
+	b.top = T
+	b.value, _ = Writable(reflect.ValueOf(I))
 }
 
 // Set effectively sets V[field] = value.
 func (b *BoundMapping) Set(field string, value interface{}) error {
-	var fieldValue reflect.Value
-	var err error
-
-	if FlagUsePaths {
-		var p path.Path
-		var ok bool
-		if p, ok = b.paths[field]; !ok {
-			err = errors.Errorf("unknown field %v", field)
-			if b.err == nil {
-				b.err = err
-				return b.err
-			}
-			return err
+	if b.err == ErrReadOnly {
+		return b.err
+	}
+	//
+	index := b.indeces[field]
+	if len(index) == 0 {
+		err := fmt.Errorf("%w: %v", ErrUnknownField, field)
+		if b.err == nil {
+			b.err = err
 		}
-		fieldValue = p.Value(b.value.WriteValue)
-	} else {
-		indeces := b.indeces[field]
-		fieldValue, err = b.value.FieldByIndex(indeces)
-		if err != nil {
-			if b.err == nil {
-				b.err = errors.Go(err)
-				return b.err
-			}
-			return errors.Go(err)
+		return err
+	}
+	final := len(index) - 1 // The final index
+	v := b.value
+	for k, n := range index {
+		if b.hasPointers && k < final {
+			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
+			v, _ = Writable(v.Field(n))
+		} else {
+			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+			v = v.Field(n)
 		}
 	}
 	//
 	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
 	// which will cut down our allocations and increase speed.
-	if fieldValue.Type() == reflect.TypeOf(value) {
+	if v.Type() == reflect.TypeOf(value) {
 		switch tt := value.(type) {
 		case bool:
-			fieldValue.SetBool(tt)
+			v.SetBool(tt)
 			return nil
 		case int:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int8:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int16:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int32:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int64:
-			fieldValue.SetInt(tt)
+			v.SetInt(tt)
 			return nil
 		case uint:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint8:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint16:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint32:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint64:
-			fieldValue.SetUint(tt)
+			v.SetUint(tt)
 			return nil
 		case float32:
-			fieldValue.SetFloat(float64(tt))
+			v.SetFloat(float64(tt))
 			return nil
 		case float64:
-			fieldValue.SetFloat(tt)
+			v.SetFloat(tt)
 			return nil
 		case string:
-			fieldValue.SetString(tt)
+			v.SetString(tt)
 			return nil
 		}
 	}
 	//
 	// If the type-switch above didn't hit then we'll coerce the
 	// fieldValue to a *Value and use our swiss-army knife Value.To().
-	err = V(fieldValue).To(value)
+	err := V(v).To(value)
 	if err != nil && b.err == nil {
-		b.err = errors.Errorf("While setting [%v]: %v", field, err.Error())
+		b.err = err // TODO Possibly wrap with more information.
 	}
 	return err
 }

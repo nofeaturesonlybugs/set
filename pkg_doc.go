@@ -1,6 +1,10 @@
 // Package set is a small wrapper around the official reflect package that facilitates loose type conversion,
 // assignment into native Go types, and utilities to populate deeply nested Go structs.
 //
+// Todo
+//
+// TODO: Write or rewrite section on addressable types.
+//
 // Data Types
 //
 // In this package documentation float, int, and uint include the bit-specific types.  For example

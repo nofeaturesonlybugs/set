@@ -1,11 +1,19 @@
 package set
 
 import (
+	"fmt"
 	"reflect"
 
-	"github.com/nofeaturesonlybugs/errors"
-
 	"github.com/nofeaturesonlybugs/set/path"
+)
+
+var (
+	// ErrPlanExceeded is returned when the next access to a PreparedMapping exceeds the
+	// fields specified by the earlier call to Plan.
+	ErrPlanExceeded = fmt.Errorf("set: prepared mapping: attempted access extends plan")
+
+	// ErrPlanInvalid is returned when a PreparedMapping does not have a valid access plan.
+	ErrPlanInvalid = fmt.Errorf("set: prepared mapping: plan invalid")
 )
 
 // preparedMappingField is a prepare field access.
@@ -15,25 +23,34 @@ type preparedMappingField struct {
 
 // PreparedMapping is returned from Mapper's Prepare method.
 //
-// Do not create PreparedMapping types any other way.
+// A PreparedMapping must not be copied except via its Copy method.
 //
 // PreparedMappings should be used in iterative code that needs to read or mutate
 // many instances of the same struct.  PreparedMappings do not allow for indeterminate
 // field access between instances -- every struct instance must have the same fields
 // accessed in the same order.  This behavior is akin to prepared statements in
-// a database engine; if you need more adhoc or indeterminate access use a BoundMapping.
+// a database engine; if you need adhoc or indeterminate access use a BoundMapping.
+//	var a, b T
 //
-// The Plan() method must be called with the field names that are intended to be
-// accessed before any other method calls are valid, with the exception of Rebind().
+//	p := myMapper.Prepare(&a)
+//	_ = p.Plan("Field", "Other") // check err in production
+//
+//	p.Set(10)          // a.Field = 10
+//	p.Set("Hello")     // a.Other = "Hello"
+//
+//	p.Rebind(&b)       // resets internal plan counter
+//	p.Set(27)          // b.Field = 27
+//	p.Set("World")     // b.Other = "World"
+//
+// All methods that return an error will return ErrPlanInvalid until Plan is called
+// specifying an access plan.  Methods that do not return an error can be called before
+// a plan has been specified.
 type PreparedMapping struct {
 	value *Value
 	err   error
 
-	// prepared plan values
-	//
-	// k is the index into the plan and must be incremented at the
-	// beginning of every method call except Rebind() where it shall
-	// be reset to k=-1
+	// plan is the slice of steps created by Plan and
+	// k is the index into plan for the next step.
 	k    int
 	plan []preparedMappingField
 
@@ -45,131 +62,138 @@ type PreparedMapping struct {
 	paths map[string]path.Path
 }
 
-// Assignables returns a slice of interfaces by field names where each element is a pointer
-// to the field in the bound variable.
+// Assignables returns a slice of pointers to the fields in the currently bound
+// struct in the order specified by the last call to Plan.
 //
-// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
-// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
-// and the lengths are not checked, meaning your program could panic.
+// To alleviate pressure on the garbage collector the return slice can be pre-allocated and
+// passed as the argument to Assignables.  If non-nil it is assumed len(plan) == len(rv)
+// and failure to provide an appropriately sized non-nil slice will cause a panic.
 //
-// During traversal this method will instantiate struct fields that are themselves structs.
+// During traversal this method will allocate struct fields that are nil pointers.
 //
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
-func (p PreparedMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
-	panic("PreparedMapping.Assignables not imlemented") // TODO RM
-	// TODO
-	// if !p.value.CanWrite {
-	// 	return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
-	// }
-	// if rv == nil {
-	// 	rv = make([]interface{}, len(fields))
-	// }
-	// for fieldnum, name := range fields {
-	// 	indeces := p.indeces[name]
-	// 	if len(indeces) == 0 {
-	// 		return nil, errors.Errorf("No mapping for field [%v]", name)
-	// 	}
-	// 	v := p.value.WriteValue
-	// 	for k, size := 0, len(indeces); k < size; k++ {
-	// 		n := indeces[k] // n is the specific FieldIndex into v
-	// 		if k < size-1 {
-	// 			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-	// 			v, _ = Writable(v.Field(n))
-	// 		} else {
-	// 			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
-	// 			rv[fieldnum] = v.Field(n).Addr().Interface()
-	// 		}
-	// 	}
-	// }
-	// return rv, nil
+func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
+	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+		return rv, p.err
+	}
+	var v reflect.Value
+	if rv == nil {
+		rv = make([]interface{}, len(p.plan))
+	}
+	for n, path := range p.plan {
+		v = path.Value(p.value.WriteValue)
+		rv[n] = v.Addr().Interface()
+	}
+	return rv, nil
 }
 
-// Copy creates an exact copy of the BoundMapping.  Since a BoundMapping is implicitly tied to a single
-// value sometimes it may be useful to create and cache a BoundMapping early in a program's initialization and
-// then call Copy() to work with multiple instances of bound values simultaneously.
+// Copy creates an exact copy of the PreparedMapping.
+//
+// One use case for Copy is to create a set of PreparedMappings early in a program's
+// init phase.  During later execution when a PreparedMapping is needed for type T
+// it can be obtained by calling Copy on the cached PreparedMapping for that type.
 func (p PreparedMapping) Copy() PreparedMapping {
-	panic("PreparedMapping.Copy not implemented") // TODO RM
-	// TODO
-	// return BoundMapping{
-	// 	value: p.value.Copy(),
-	// 	err:   p.err,
-	// 	// NB   Don't need to copy me.mapping since we never alter it.
-	// 	indeces: p.indeces,
-	// }
+	return PreparedMapping{
+		value:   p.value.Copy(),
+		err:     p.err,
+		k:       p.k,
+		plan:    append([]preparedMappingField(nil), p.plan...),
+		indeces: p.indeces,
+		paths:   p.paths,
+	}
 }
 
-// Err returns an error that may have occurred during repeated calls to Set(); it is reset on
-// calls to Rebind()
+// Err returns an error that may have occurred during repeated calls to Set.
+//
+// Err is reset on calls to Plan or Rebind.
 func (p PreparedMapping) Err() error {
 	return p.err
 }
 
-// Field returns the *Value for field.
-func (p PreparedMapping) Field(field string) (*Value, error) {
-	panic("PreparedMapping.Field not yet implemented") // TODO RM
-	// TODO
-	// var v reflect.Value
-	// var err error
-	// if v, err = p.value.FieldByIndex(p.indeces[field]); err != nil {
-	// 	return nil, errors.Go(err)
-	// }
-	// return V(v), nil
+// Field returns the *Value for the next field.
+//
+// Each call to Field advances the internal access pointer in order to traverse the
+// fields in the same order as the last call to Plan.
+//
+// ErrPlanInvalid is returned if Plan has not been called.  If this call to Field
+// exceeds the length of the plan then ErrPlanExceeded is returned.  Other
+// errors from this package or standard library may also be returned.
+func (p *PreparedMapping) Field() (*Value, error) {
+	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+		return nil, p.err
+	}
+	//
+	var fieldValue reflect.Value
+	var err error
+	//
+	if err = p.next(); err != nil {
+		return nil, err
+	}
+	//
+	path := p.plan[p.k].Path
+	fieldValue = path.Value(p.value.WriteValue)
+	return V(fieldValue), nil
 }
 
-// Fields returns a slice of interfaces by field names where each element is the field value.
+// Fields returns a slice of values to the fields in the currently bound struct in the order
+// specified by the last call to Plan.
 //
-// The second argument, if non-nil, will be the first return value.  In other words pre-allocating
-// rv will cut down on memory allocations.  It is assumed that if rv is non-nil that len(fields) == len(rv)
-// and the lengths are not checked, meaning your program might panic if rv is not the correct length.
+// To alleviate pressure on the garbage collector the return slice can be pre-allocated and
+// passed as the argument to Fields.  If non-nil it is assumed len(plan) == len(rv)
+// and failure to provide an appropriately sized non-nil slice will cause a panic.
 //
-// During traversal this method will instantiate struct fields that are themselves structs.
+// During traversal this method will allocate struct fields that are nil pointers.
 //
 // An example use-case would be obtaining a slice of query arguments by column name during
 // database queries.
-func (p PreparedMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
-	panic("PreparedMapping.Fields not yet implemented") // TODO RM
-	// TODO
-	// if !p.value.CanWrite {
-	// 	return nil, errors.Errorf("Value in BoundMapping is not writable; pass the address of your destination value when binding.")
-	// }
-	// if rv == nil {
-	// 	rv = make([]interface{}, len(fields))
-	// }
-	// for fieldnum, name := range fields {
-	// 	indeces := p.indeces[name]
-	// 	if len(indeces) == 0 {
-	// 		return nil, errors.Errorf("No mapping for field [%v]", name)
-	// 	}
-	// 	v := p.value.WriteValue
-	// 	for k, size := 0, len(indeces); k < size; k++ {
-	// 		n := indeces[k] // n is the specific FieldIndex into v
-	// 		if k < size-1 {
-	// 			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-	// 			v, _ = Writable(v.Field(n))
-	// 		} else {
-	// 			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
-	// 			rv[fieldnum] = v.Field(n).Interface()
-	// 		}
-	// 	}
-	// }
-	// return rv, nil
+func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
+	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+		return rv, p.err
+	}
+	var v reflect.Value
+	if rv == nil {
+		rv = make([]interface{}, len(p.plan))
+	}
+	for n, path := range p.plan {
+		v = path.Value(p.value.WriteValue)
+		rv[n] = v.Interface()
+	}
+	return rv, nil
 }
 
-// Plan builds the field access plan and must be called before calling other methods
-// with the exception of Rebind().  In other words Rebind() is the only method that can
-// be called while a plan is not in place.
+// Plan builds the field access plan and must be called before any other methods that
+// return an error.
+//
+// Each call to plan:
+//	1. Resets any internal error to nil
+//	2. Resets the internal plan-step counter.
+//
+// If an unknown field is specified then ErrUnknownField is wrapped with the field name
+// and the internal error is set to ErrPlanInvalid.
 func (p *PreparedMapping) Plan(fields ...string) error {
+	if p.err == ErrReadOnly {
+		return p.err
+	}
 	var path path.Path
+	var max int
 	var ok bool
 	//
+	p.err = nil
 	p.k = -1
-	p.plan = nil
+	//
+	// Ensure p.plan has enough space and then reslice to empty.
+	if max = len(fields); max > cap(p.plan) {
+		p.plan = make([]preparedMappingField, 0, max)
+	}
+	p.plan = p.plan[0:0]
+	//
 	for _, field := range fields {
 		if path, ok = p.paths[field]; !ok {
-			return errors.Errorf("unknown field %v", field)
+			p.err = ErrPlanInvalid
+			return fmt.Errorf("%w: %v", ErrUnknownField, field)
 		}
-		p.plan = append(p.plan, preparedMappingField{path})
+		p.plan = append(p.plan, preparedMappingField{Path: path})
 	}
 	// TODO Rebuild cache for current object
 	return nil
@@ -177,22 +201,45 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 
 // Rebind will replace the currently bound value with the new variable I.
 func (p *PreparedMapping) Rebind(I interface{}) {
-	// ^^ me.value is a pointer so a value receiver is ok.
+	if p.err == ErrReadOnly {
+		return
+	}
 	p.err = nil
-	p.value.Rebind(I)
 	p.k = -1
+	p.value.Rebind(I)
+}
+
+// next attempts to advance the internal counter by one.  If advancing the counter
+// exceeds len(plan) then ErrPlanExceeded is returned.
+func (p *PreparedMapping) next() error {
+	p.k++
+	if p.k == len(p.plan) {
+		p.k--
+		if p.err == nil {
+			p.err = ErrPlanExceeded
+		}
+		return ErrPlanExceeded
+	}
+	return nil
 }
 
 // Set effectively sets V[field] = value.
+//
+// Each call to Set advances the internal access pointer in order to traverse the
+// fields in the same order as the last call to Plan.
+//
+// ErrPlanInvalid is returned if Plan has not been called.  If this call to Set
+// exceeds the length of the plan then ErrPlanExceeded is returned.  Other
+// errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Set(value interface{}) error {
+	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+		return p.err
+	}
+	//
 	var fieldValue reflect.Value
 	var err error
-	// Increment plan counter and compare with length.
-	if p.k = p.k + 1; !(p.k < len(p.plan)) {
-		err = errors.Errorf("access beyond planned steps") // TODO Use an ErrPlanAccess or similar
-		if p.err != nil {
-			p.err = err
-		}
+	//
+	if err = p.next(); err != nil {
 		return err
 	}
 	//
@@ -252,7 +299,7 @@ func (p *PreparedMapping) Set(value interface{}) error {
 	// fieldValue to a *Value and use our swiss-army knife Value.To().
 	err = V(fieldValue).To(value)
 	if err != nil && p.err == nil {
-		p.err = errors.Errorf("While setting [k=%v]: %v", p.k, err.Error()) // TODO Better meta than p.k?
+		p.err = err // TODO Possibly wrap with more information.
 	}
 	return err
 }
