@@ -11,9 +11,9 @@ import (
 	"github.com/nofeaturesonlybugs/set"
 )
 
-// MapField indicates which field binding to set and what to expect.
+// MapField indicates which struct field to set and what to expect.
 type MapField struct {
-	// The field to set via mapping.
+	// The field to access or set.
 	Field string
 
 	// The value to set.
@@ -43,9 +43,12 @@ type MapStructTest struct {
 type MapStructTests []MapStructTest
 
 // Run runs the tests in MapStructTests.
-func (tests MapStructTests) Run(t *testing.T) {
-	m := &set.Mapper{
-		Join: ".",
+func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
+	if m == nil {
+		// Default if not provided is basic mapper joining with DOT
+		m = &set.Mapper{
+			Join: ".",
+		}
 	}
 	//
 	// NewV creates a copy of the test.V so that each test runs on a separate instance.
@@ -69,91 +72,71 @@ func (tests MapStructTests) Run(t *testing.T) {
 			hasUnknownField = field.Error == set.ErrUnknownField
 		}
 		//
-		// Mapper.Bind Mapper.Bind Mapper.Bind Mapper.Bind Mapper.Bind Mapper.Bind
-		//
-		t.Run("Bind", func(t *testing.T) {
-			if test.MapperError != nil {
-				// When Mapper.Bind returns an error we expect further errors from most BoundMapping methods.
-				// NB:  We put this logic here to prevent polluting our tests when Mapper.Bind does not
-				//      return an error.
-				t.Run("error", func(t *testing.T) {
-					chk := assert.New(t)
-					//
-					b, err := m.Bind(NewV(test.V))
-					chk.ErrorIs(err, test.MapperError, describe)
-					//
-					ptrs, err := b.Assignables(fieldNames, nil)
-					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(ptrs, describe)
-					//
-					for _, field := range fieldNames {
-						v, err := b.Field(field)
-						chk.ErrorIs(err, set.ErrReadOnly, describe)
-						chk.Nil(v, describe)
-					}
-					//
-					values, err := b.Fields(fieldNames, nil)
-					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(values, describe)
-					//
-					for _, field := range test.Fields {
-						err := b.Set(field.Field, field.To)
-						chk.ErrorIs(err, set.ErrReadOnly, describe)
-					}
-				})
-				return
-			} else if hasUnknownField {
-				// When an unknown field is present we expect specific behaviors.
-				t.Run("unknown", func(t *testing.T) {
-					chk := assert.New(t)
-					//
-					b, err := m.Bind(NewV(test.V))
-					chk.ErrorIs(err, test.MapperError, describe)
-					//
-					_, err = b.Assignables(fieldNames, nil)
-					chk.ErrorIs(err, set.ErrUnknownField, describe)
-					//
-					for _, field := range test.Fields {
-						v, err := b.Field(field.Field)
-						chk.ErrorIs(err, field.Error, describe)
-						if err != nil {
-							continue
-						}
-						err = v.To(field.To)
-						chk.NoError(err, describe)
-						chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
-					}
-					//
-					_, err = b.Fields(fieldNames, nil)
-					chk.ErrorIs(err, set.ErrUnknownField, describe)
-					//
-					for _, field := range test.Fields {
-						err = b.Set(field.Field, field.To)
-						chk.ErrorIs(err, field.Error, describe)
-						if err != nil {
-							continue
-						}
-						v, _ := b.Field(field.Field)
-						chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
-					}
-				})
-				return
-			}
-			t.Run("Assignables", func(t *testing.T) {
+		if test.MapperError != nil {
+			t.Run("Bind "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
 				//
 				b, err := m.Bind(NewV(test.V))
 				chk.ErrorIs(err, test.MapperError, describe)
 				//
 				ptrs, err := b.Assignables(fieldNames, nil)
-				chk.NoError(err, describe)
-				chk.Equal(len(fieldNames), len(ptrs), describe)
+				chk.ErrorIs(err, set.ErrReadOnly, describe)
+				chk.Nil(ptrs, describe)
+				//
+				for _, field := range fieldNames {
+					v, err := b.Field(field)
+					chk.ErrorIs(err, set.ErrReadOnly, describe)
+					chk.Nil(v, describe)
+				}
+				//
+				values, err := b.Fields(fieldNames, nil)
+				chk.ErrorIs(err, set.ErrReadOnly, describe)
+				chk.Nil(values, describe)
+				//
+				for _, field := range test.Fields {
+					err := b.Set(field.Field, field.To)
+					chk.ErrorIs(err, set.ErrReadOnly, describe)
+				}
 			})
-			t.Run("Field", func(t *testing.T) {
+			t.Run("Prepare "+test.Name, func(t *testing.T) {
+				chk := assert.New(t)
+				//
+				p, err := m.Prepare(NewV(test.V))
+				chk.ErrorIs(err, test.MapperError, describe)
+				//
+				err = p.Plan(fieldNames...)
+				chk.ErrorIs(err, set.ErrReadOnly, describe)
+				//
+				ptrs, err := p.Assignables(nil)
+				chk.ErrorIs(err, set.ErrReadOnly, describe)
+				chk.Nil(ptrs, describe)
+				//
+				for range fieldNames {
+					v, err := p.Field()
+					chk.ErrorIs(err, set.ErrReadOnly, describe)
+					chk.Nil(v, describe)
+				}
+				//
+				values, err := p.Fields(nil)
+				chk.ErrorIs(err, set.ErrReadOnly, describe)
+				chk.Nil(values, describe)
+				//
+				for _, field := range test.Fields {
+					err = p.Set(field.To)
+					chk.ErrorIs(err, set.ErrReadOnly, describe)
+				}
+			})
+			continue
+		} else if hasUnknownField {
+			// When an unknown field is present we expect specific behaviors.
+			t.Run("Bind "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
 				//
 				b, err := m.Bind(NewV(test.V))
 				chk.ErrorIs(err, test.MapperError, describe)
+				//
+				_, err = b.Assignables(fieldNames, nil)
+				chk.ErrorIs(err, set.ErrUnknownField, describe)
 				//
 				for _, field := range test.Fields {
 					v, err := b.Field(field.Field)
@@ -165,22 +148,9 @@ func (tests MapStructTests) Run(t *testing.T) {
 					chk.NoError(err, describe)
 					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
 				}
-			})
-			t.Run("Fields", func(t *testing.T) {
-				chk := assert.New(t)
 				//
-				b, err := m.Bind(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				values, err := b.Fields(fieldNames, nil)
-				chk.NoError(err, describe)
-				chk.Equal(len(fieldNames), len(values), describe)
-			})
-			t.Run("Set", func(t *testing.T) {
-				chk := assert.New(t)
-				//
-				b, err := m.Bind(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
+				_, err = b.Fields(fieldNames, nil)
+				chk.ErrorIs(err, set.ErrUnknownField, describe)
 				//
 				for _, field := range test.Fields {
 					err = b.Set(field.Field, field.To)
@@ -192,140 +162,152 @@ func (tests MapStructTests) Run(t *testing.T) {
 					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
 				}
 			})
-		})
-		//
-		// Mapper.Prepare Mapper.Prepare Mapper.Prepare Mapper.Prepare Mapper.Prepare Mapper.Prepare
-		//
-		t.Run("Prepare", func(t *testing.T) {
-			if test.MapperError != nil {
-				// When Mapper.Prepare returns an error we expect further errors from most BoundMapping methods.
-				// NB:  We put this logic here to prevent polluting our tests when Mapper.Prepare does not
-				//      return an error.
-				t.Run("error", func(t *testing.T) {
-					chk := assert.New(t)
-					//
-					p, err := m.Prepare(NewV(test.V))
-					chk.ErrorIs(err, test.MapperError, describe)
-					//
-					err = p.Plan(fieldNames...)
-					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					//
-					ptrs, err := p.Assignables(nil)
-					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(ptrs, describe)
-					//
-					for range fieldNames {
-						v, err := p.Field()
-						chk.ErrorIs(err, set.ErrReadOnly, describe)
-						chk.Nil(v, describe)
-					}
-					//
-					values, err := p.Fields(nil)
-					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(values, describe)
-					//
-					for _, field := range test.Fields {
-						err = p.Set(field.To)
-						chk.ErrorIs(err, set.ErrReadOnly, describe)
-					}
-				})
-				return
-			} else if hasUnknownField {
-				// Expect specific behaviors when an unknown field is present.
-				t.Run("unknown", func(t *testing.T) {
-					chk := assert.New(t)
-					//
-					p, err := m.Prepare(NewV(test.V))
-					chk.ErrorIs(err, test.MapperError, describe)
-					//
-					err = p.Plan(fieldNames...)
-					chk.ErrorIs(err, set.ErrUnknownField, describe)
-					//
-					ptrs, err := p.Assignables(nil)
-					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
-					chk.Nil(ptrs, describe)
-					//
-					for range fieldNames {
-						v, err := p.Field()
-						chk.ErrorIs(err, set.ErrPlanInvalid, describe)
-						chk.Nil(v, describe)
-					}
-					//
-					values, err := p.Fields(nil)
-					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
-					chk.Nil(values, describe)
-					//
-					for _, field := range test.Fields {
-						err = p.Set(field.To)
-						chk.ErrorIs(err, set.ErrPlanInvalid, describe)
-					}
-				})
-				return
-			}
-			t.Run("Assignables", func(t *testing.T) {
+			t.Run("Prepare "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
 				//
 				p, err := m.Prepare(NewV(test.V))
 				chk.ErrorIs(err, test.MapperError, describe)
 				//
 				err = p.Plan(fieldNames...)
-				chk.NoError(err, describe)
+				chk.ErrorIs(err, set.ErrUnknownField, describe)
 				//
 				ptrs, err := p.Assignables(nil)
-				chk.NoError(err, describe)
-				chk.Equal(len(fieldNames), len(ptrs), describe)
-			})
-			t.Run("Field", func(t *testing.T) {
-				chk := assert.New(t)
+				chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+				chk.Nil(ptrs, describe)
 				//
-				p, err := m.Prepare(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				err = p.Plan(fieldNames...)
-				chk.NoError(err, describe)
-				//
-				for _, field := range test.Fields {
+				for range fieldNames {
 					v, err := p.Field()
-					chk.ErrorIs(err, field.Error, describe)
-					if err != nil {
-						continue
-					}
-					err = v.To(field.To)
-					chk.NoError(err, describe)
-					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+					chk.Nil(v, describe)
 				}
-			})
-			t.Run("Fields", func(t *testing.T) {
-				chk := assert.New(t)
-				//
-				p, err := m.Prepare(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				err = p.Plan(fieldNames...)
-				chk.NoError(err, describe)
 				//
 				values, err := p.Fields(nil)
-				chk.NoError(err, describe)
-				chk.Equal(len(fieldNames), len(values), describe)
-			})
-			t.Run("Set", func(t *testing.T) {
-				chk := assert.New(t)
-				//
-				p, err := m.Prepare(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				err = p.Plan(fieldNames...)
-				chk.NoError(err)
+				chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+				chk.Nil(values, describe)
 				//
 				for _, field := range test.Fields {
 					err = p.Set(field.To)
-					chk.ErrorIs(err, field.Error, describe)
-					if err != nil {
-						continue
-					}
-					// TODO Need a way to confirm field was set correctly
+					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
 				}
 			})
+			continue
+		}
+		t.Run("Bind Assignables "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			b, err := m.Bind(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			ptrs, err := b.Assignables(fieldNames, nil)
+			chk.NoError(err, describe)
+			chk.Equal(len(fieldNames), len(ptrs), describe)
+		})
+		t.Run("Prepare Assignables "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			p, err := m.Prepare(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			err = p.Plan(fieldNames...)
+			chk.NoError(err, describe)
+			//
+			ptrs, err := p.Assignables(nil)
+			chk.NoError(err, describe)
+			chk.Equal(len(fieldNames), len(ptrs), describe)
+		})
+		t.Run("Bind Field "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			b, err := m.Bind(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			for _, field := range test.Fields {
+				v, err := b.Field(field.Field)
+				chk.ErrorIs(err, field.Error, describe)
+				if err != nil {
+					continue
+				}
+				err = v.To(field.To)
+				chk.NoError(err, describe)
+				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+			}
+		})
+		t.Run("Prepare Field "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			p, err := m.Prepare(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			err = p.Plan(fieldNames...)
+			chk.NoError(err, describe)
+			//
+			for _, field := range test.Fields {
+				v, err := p.Field()
+				chk.ErrorIs(err, field.Error, describe)
+				if err != nil {
+					continue
+				}
+				err = v.To(field.To)
+				chk.NoError(err, describe)
+				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+			}
+		})
+		t.Run("Bind Fields "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			b, err := m.Bind(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			values, err := b.Fields(fieldNames, nil)
+			chk.NoError(err, describe)
+			chk.Equal(len(fieldNames), len(values), describe)
+		})
+		t.Run("Prepare Fields "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			p, err := m.Prepare(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			err = p.Plan(fieldNames...)
+			chk.NoError(err, describe)
+			//
+			values, err := p.Fields(nil)
+			chk.NoError(err, describe)
+			chk.Equal(len(fieldNames), len(values), describe)
+		})
+		t.Run("Bind Set "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			b, err := m.Bind(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			for _, field := range test.Fields {
+				err = b.Set(field.Field, field.To)
+				chk.ErrorIs(err, field.Error, describe)
+				if err != nil {
+					continue
+				}
+				v, _ := b.Field(field.Field)
+				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+			}
+		})
+		t.Run("Prepare Set "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			//
+			p, err := m.Prepare(NewV(test.V))
+			chk.ErrorIs(err, test.MapperError, describe)
+			//
+			err = p.Plan(fieldNames...)
+			chk.NoError(err)
+			//
+			for _, field := range test.Fields {
+				err = p.Set(field.To)
+				chk.ErrorIs(err, field.Error, describe)
+				if err != nil {
+					continue
+				}
+				// TODO Need a way to confirm field was set correctly
+			}
 		})
 	}
 }
@@ -534,6 +516,7 @@ func Test_Mapper_BindPrepare(t *testing.T) {
 	var nested NestedStruct
 	var nestedPtr NestedPtrStruct
 	var primitives PrimitivesStruct
+	//
 	tests := []MapStructTest{
 		//
 		// Unaddressable Unaddressable Unaddressable Unaddressable Unaddressable Unaddressable
@@ -624,9 +607,11 @@ func Test_Mapper_BindPrepare(t *testing.T) {
 				{Field: "S", To: "Cheerio", Expect: "Cheerio"},
 			},
 		},
-		CreateMapStructTestVendor(),
 	}
-	MapStructTests(tests).Run(t)
+	//
+	tests = append(tests, CreateTestsSale()...)
+	//
+	MapStructTests(tests).Run(t, nil)
 }
 
 func Benchmark_Mapper_BindPrepare(b *testing.B) {
@@ -724,12 +709,14 @@ func Benchmark_Mapper_BindPrepare(b *testing.B) {
 				{Field: "S", To: "Cheerio", Expect: "Cheerio"},
 			},
 		},
-		CreateMapStructTestVendor(),
 	}
+	//
+	tests = append(tests, CreateTestsSale()...)
+	//
 	MapStructTests(tests).Benchmark(b)
 }
 
-func CreateMapStructTestVendor() MapStructTest {
+func CreateTestsSale() []MapStructTest {
 	//
 	type Common struct {
 		Id int
@@ -765,25 +752,27 @@ func CreateMapStructTestVendor() MapStructTest {
 	var sale Sale
 	created := time.Now().Add(-20 * time.Minute)
 	modified := created.Add(5 * time.Minute)
-	test := MapStructTest{
-		Name: "sale",
-		V:    &sale,
-		Fields: []MapField{
-			{Field: "Common.Id", To: 4, Expect: 4},
-			{Field: "Timestamps.CreatedTime", To: created.Format("2006-01-02 15:04:05"), Expect: created.Format("2006-01-02 15:04:05")},
-			{Field: "Timestamps.ModifiedTime", To: modified.Format("2006-01-02 15:04:05"), Expect: modified.Format("2006-01-02 15:04:05")},
-			{Field: "Price", To: "10.00", Expect: 10},
-			{Field: "Quantity", To: "5", Expect: 5},
-			{Field: "Total", To: "50.00", Expect: 50},
-			{Field: "Customer.Common.Id", To: 42, Expect: 42},
-			{Field: "Customer.First", To: "John", Expect: "John"},
-			{Field: "Customer.Last", To: "Smith", Expect: "Smith"},
-			{Field: "Vendor.Common.Id", To: 4242, Expect: 4242},
-			{Field: "Vendor.Name", To: "Neat Widgets Inc.", Expect: "Neat Widgets Inc."},
-			{Field: "Vendor.Description", To: "Sales neat widgets.", Expect: "Sales neat widgets."},
-			{Field: "Vendor.Contact.Common.Id", To: 424242, Expect: 424242},
-			{Field: "Vendor.Contact.First", To: "Jane", Expect: "Jane"},
-			{Field: "Vendor.Contact.Last", To: "Doe", Expect: "Doe"},
+	test := []MapStructTest{
+		{
+			Name: "sale",
+			V:    &sale,
+			Fields: []MapField{
+				{Field: "Common.Id", To: 4, Expect: 4},
+				{Field: "Timestamps.CreatedTime", To: created.Format("2006-01-02 15:04:05"), Expect: created.Format("2006-01-02 15:04:05")},
+				{Field: "Timestamps.ModifiedTime", To: modified.Format("2006-01-02 15:04:05"), Expect: modified.Format("2006-01-02 15:04:05")},
+				{Field: "Price", To: "10.00", Expect: 10},
+				{Field: "Quantity", To: "5", Expect: 5},
+				{Field: "Total", To: "50.00", Expect: 50},
+				{Field: "Customer.Common.Id", To: 42, Expect: 42},
+				{Field: "Customer.First", To: "John", Expect: "John"},
+				{Field: "Customer.Last", To: "Smith", Expect: "Smith"},
+				{Field: "Vendor.Common.Id", To: 4242, Expect: 4242},
+				{Field: "Vendor.Name", To: "Neat Widgets Inc.", Expect: "Neat Widgets Inc."},
+				{Field: "Vendor.Description", To: "Sales neat widgets.", Expect: "Sales neat widgets."},
+				{Field: "Vendor.Contact.Common.Id", To: 424242, Expect: 424242},
+				{Field: "Vendor.Contact.First", To: "Jane", Expect: "Jane"},
+				{Field: "Vendor.Contact.Last", To: "Doe", Expect: "Doe"},
+			},
 		},
 	}
 	return test
