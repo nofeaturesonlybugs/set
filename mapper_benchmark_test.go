@@ -93,7 +93,7 @@ func BenchmarkMapper(b *testing.B) {
 		Vendor   Vendor
 	}
 	//
-	b.Run("bound no rebind", func(b *testing.B) {
+	b.Run("Bind no Rebind", func(b *testing.B) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(Common{}, Timestamps{}),
 			Join:     "_",
@@ -136,7 +136,7 @@ func BenchmarkMapper(b *testing.B) {
 		}
 	})
 	//
-	b.Run("bound rebind", func(b *testing.B) {
+	b.Run("Bind Rebind", func(b *testing.B) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(Common{}, Timestamps{}),
 			Join:     "_",
@@ -178,7 +178,7 @@ func BenchmarkMapper(b *testing.B) {
 		}
 	})
 	//
-	b.Run("prepared", func(b *testing.B) {
+	b.Run("Prepare Rebind", func(b *testing.B) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(Common{}, Timestamps{}),
 			Join:     "_",
