@@ -30,6 +30,16 @@
             Changing the Mapper.Bind signature allows this checking to be performed when
             a BoundMapping is being created and lessens the burden on BoundMapping methods from
             performing this check and returning the proper error.
+    
+    + BoundMapping
+        + Rebind allows argument to be reflect.Value if-and-only-if the value stored in the
+        reflect.Value is compatible with the type used to created the BoundMapping.
+
+    + Add types Slice and SlicePtr
+        Slice facilitates element creation and appending to []T.
+        SlicePtr ensures an interface{} value is *[]T or pointer chain to []T.  Deserializers needing
+        to deserialize data into a caller-provided slice can use SlicePtr to simplify validating
+        the destination as well as element creation and addition to the []T.        
 
 0.4.0
     + set.Mapper
