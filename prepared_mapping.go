@@ -199,14 +199,21 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 	return nil
 }
 
-// Rebind will replace the currently bound value with the new variable I.
-func (p *PreparedMapping) Rebind(I interface{}) {
+// Rebind will replace the currently bound value with the new variable v.
+//
+// v must have the same type as the original value used to create the PreparedMapping
+// otherwise a panic will occur.
+//
+// As a convenience Rebind allows v to be an instance of reflect.Value.  This prevents
+// unnecessary calls to reflect.Value.Interface().
+func (p *PreparedMapping) Rebind(v interface{}) {
 	if p.err == ErrReadOnly {
 		return
 	}
 	p.err = nil
 	p.k = -1
-	p.value.Rebind(I)
+	// TODO When refactoring this to remove p.value copy+paste the implementation in BoundMapping.
+	p.value.Rebind(v)
 }
 
 // next attempts to advance the internal counter by one.  If advancing the counter

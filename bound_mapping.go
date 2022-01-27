@@ -199,18 +199,33 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 	return rv, nil
 }
 
-// Rebind will replace the currently bound value with the new variable I.
-func (b *BoundMapping) Rebind(I interface{}) {
+// Rebind will replace the currently bound value with the new variable v.
+//
+// v must have the same type as the original value used to create the BoundMapping
+// otherwise a panic will occur.
+//
+// As a convenience Rebind allows v to be an instance of reflect.Value.  This prevents
+// unnecessary calls to reflect.Value.Interface().
+func (b *BoundMapping) Rebind(v interface{}) {
 	if b.err == ErrReadOnly {
 		return
 	}
-	T := reflect.TypeOf(I)
+	//
+	// Allow reflect.Value to be passed directly.
+	var rv reflect.Value
+	switch sw := v.(type) {
+	case reflect.Value:
+		rv = sw
+	default:
+		rv = reflect.ValueOf(v)
+	}
+	T := rv.Type()
 	if b.top != T {
-		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", b.value.Interface(), I)) // TODO ErrRebind maybe?
+		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", b.value.Interface(), v)) // TODO ErrRebind maybe?
 	}
 	b.err = nil
 	b.top = T
-	b.value, _ = Writable(reflect.ValueOf(I))
+	b.value, _ = Writable(rv)
 }
 
 // Set effectively sets V[field] = value.
