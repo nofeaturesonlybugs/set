@@ -136,10 +136,12 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	mapping := me.Map(I)
 	//
 	rv := BoundMapping{
-		top:         reflect.TypeOf(I),
-		value:       value,
-		indeces:     mapping.Indeces,
-		hasPointers: mapping.HasPointers,
+		top:   reflect.TypeOf(I),
+		value: value,
+		paths: map[string]path.ReflectPath{},
+	}
+	for k, p := range mapping.Paths {
+		rv.paths[k] = p.ReflectPath()
 	}
 	return rv, nil
 }

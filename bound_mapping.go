@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+
+	"github.com/nofeaturesonlybugs/set/path"
 )
 
 // BoundMapping is returned from Mapper's Bind method.
@@ -33,12 +35,8 @@ type BoundMapping struct {
 	value reflect.Value
 	err   error
 
-	// NB   indeces is obtained from Mapping.Indeces and is not a copy.
-	//      Treat as read only.
-	indeces map[string][]int
-
-	// hasPointers=true means pathways exist in the bound value with pointers to instantiate.
-	hasPointers bool
+	// NB  This field should be treated as read-only.
+	paths map[string]path.ReflectPath
 }
 
 // Assignables returns a slice of pointers to the fields in the currently bound struct
@@ -60,21 +58,26 @@ func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interfac
 		rv = make([]interface{}, len(fields))
 	}
 	for fieldN, name := range fields {
-		index := b.indeces[name]
-		if len(index) == 0 {
+		step, ok := b.paths[name]
+		if !ok {
 			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
 		}
-		final := len(index) - 1 // The final index
 		v := b.value
-		for k, n := range index {
-			if b.hasPointers && k < final {
-				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-				v, _ = Writable(v.Field(n))
-			} else {
-				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+			for _, n := range step.Index {
+				v = v.Field(n)
+				for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+					if v.IsNil() && v.CanSet() {
+						v.Set(reflect.New(v.Type().Elem()))
+					}
+				}
+			}
+		} else {
+			for _, n := range step.Index {
 				v = v.Field(n)
 			}
 		}
+		v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 		rv[fieldN] = v.Addr().Interface()
 	}
 	return rv, nil
@@ -87,12 +90,10 @@ func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interfac
 // it can be obtained by calling Copy on the cached BoundMapping for that type.
 func (b BoundMapping) Copy() BoundMapping {
 	return BoundMapping{
-		top:         b.top,
-		value:       b.value,
-		err:         b.err,
-		hasPointers: b.hasPointers,
-		// NB   indeces is read-only in this type so copying not necessary.
-		indeces: b.indeces,
+		top:   b.top,
+		value: b.value,
+		err:   b.err,
+		paths: b.paths,
 	}
 }
 
@@ -107,21 +108,27 @@ func (b BoundMapping) Field(field string) (*Value, error) {
 	if b.err == ErrReadOnly {
 		return nil, b.err
 	}
-	index := b.indeces[field]
-	if len(index) == 0 {
+	step, ok := b.paths[field]
+	if !ok {
 		return nil, fmt.Errorf("%w: %v", ErrUnknownField, field)
 	}
-	final := len(index) - 1 // The final index
 	v := b.value
-	for k, n := range index {
-		if b.hasPointers && k < final {
-			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-			v, _ = Writable(v.Field(n))
-		} else {
-			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+		for _, n := range step.Index {
+			v = v.Field(n)
+			for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+				if v.IsNil() && v.CanSet() {
+					v.Set(reflect.New(v.Type().Elem()))
+				}
+			}
+		}
+	} else {
+		for _, n := range step.Index {
 			v = v.Field(n)
 		}
 	}
+	v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
+	//
 	return V(v), nil
 }
 
@@ -144,21 +151,26 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 		rv = make([]interface{}, len(fields))
 	}
 	for fieldN, name := range fields {
-		index := b.indeces[name]
-		if len(index) == 0 {
+		step, ok := b.paths[name]
+		if !ok {
 			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
 		}
-		final := len(index) - 1 // The final index
 		v := b.value
-		for k, n := range index {
-			if b.hasPointers && k < final {
-				// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-				v, _ = Writable(v.Field(n))
-			} else {
-				// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+			for _, n := range step.Index {
+				v = v.Field(n)
+				for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+					if v.IsNil() && v.CanSet() {
+						v.Set(reflect.New(v.Type().Elem()))
+					}
+				}
+			}
+		} else {
+			for _, n := range step.Index {
 				v = v.Field(n)
 			}
 		}
+		v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 		// NB  The value we want is v.Interface() which performs a number of allocations for built-in primitives.
 		//     If we switch off v's type as a pointer and it is a primitive we can skip the allocations.
 		switch ptr := v.Addr().Interface().(type) {
@@ -233,25 +245,30 @@ func (b *BoundMapping) Set(field string, value interface{}) error {
 		return b.err
 	}
 	//
-	index := b.indeces[field]
-	if len(index) == 0 {
+	step, ok := b.paths[field]
+	if !ok {
 		err := fmt.Errorf("%w: %v", ErrUnknownField, field)
 		if b.err == nil {
 			b.err = err
 		}
 		return err
 	}
-	final := len(index) - 1 // The final index
 	v := b.value
-	for k, n := range index {
-		if b.hasPointers && k < final {
-			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-			v, _ = Writable(v.Field(n))
-		} else {
-			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+		for _, n := range step.Index {
+			v = v.Field(n)
+			for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+				if v.IsNil() && v.CanSet() {
+					v.Set(reflect.New(v.Type().Elem()))
+				}
+			}
+		}
+	} else {
+		for _, n := range step.Index {
 			v = v.Field(n)
 		}
 	}
+	v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 	//
 	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
 	// which will cut down our allocations and increase speed.
