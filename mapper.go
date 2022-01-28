@@ -275,7 +275,10 @@ func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
 		top:   reflect.TypeOf(I),
 		value: value,
 		err:   ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
-		paths: mapping.Paths,
+		paths: map[string]path.ReflectPath{},
+	}
+	for k, p := range mapping.Paths {
+		rv.paths[k] = p.ReflectPath()
 	}
 	return rv, nil
 }

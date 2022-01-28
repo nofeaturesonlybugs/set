@@ -17,16 +17,6 @@ var (
 	ErrPlanInvalid = fmt.Errorf("set: prepared mapping: plan invalid")
 )
 
-// preparedMappingField is used by PreparedMapping when building its prepared access plan.
-//
-// Internally PreparedMapping.Plan will utimately build a []preparedMappingField describing
-// the field access order.
-type preparedMappingField struct {
-	Index      []int
-	FinalIndex int
-	HasPointer bool
-}
-
 // PreparedMapping is returned from Mapper's Prepare method.
 //
 // A PreparedMapping must not be copied except via its Copy method.
@@ -66,11 +56,11 @@ type PreparedMapping struct {
 	// plan is the slice of steps created by Plan and
 	// k is the index into plan for the next step.
 	k    int
-	plan []preparedMappingField
+	plan []path.ReflectPath
 
 	// NB	paths is obtained from Mapping.Paths and is not a copy.
 	//      Treat as read only.
-	paths map[string]path.Path
+	paths map[string]path.ReflectPath
 }
 
 // Assignables returns a slice of pointers to the fields in the currently bound
@@ -93,13 +83,21 @@ func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
 	}
 	for fieldN, step := range p.plan {
 		v := p.value
-		for k, n := range step.Index {
-			if step.HasPointer && k < step.FinalIndex {
-				v, _ = Writable(v.Field(n))
-			} else {
+		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+			for _, n := range step.Index {
+				v = v.Field(n)
+				for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+					if v.IsNil() && v.CanSet() {
+						v.Set(reflect.New(v.Type().Elem()))
+					}
+				}
+			}
+		} else {
+			for _, n := range step.Index {
 				v = v.Field(n)
 			}
 		}
+		v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 		rv[fieldN] = v.Addr().Interface()
 	}
 	return rv, nil
@@ -117,7 +115,7 @@ func (p PreparedMapping) Copy() PreparedMapping {
 		valid: p.valid,
 		err:   p.err,
 		k:     p.k,
-		plan:  append([]preparedMappingField(nil), p.plan...),
+		plan:  append([]path.ReflectPath(nil), p.plan...),
 		paths: p.paths,
 	}
 }
@@ -148,13 +146,21 @@ func (p *PreparedMapping) Field() (*Value, error) {
 	//
 	step := p.plan[p.k]
 	v := p.value
-	for k, n := range step.Index {
-		if step.HasPointer && k < step.FinalIndex {
-			v, _ = Writable(v.Field(n))
-		} else {
+	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+		for _, n := range step.Index {
+			v = v.Field(n)
+			for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+				if v.IsNil() && v.CanSet() {
+					v.Set(reflect.New(v.Type().Elem()))
+				}
+			}
+		}
+	} else {
+		for _, n := range step.Index {
 			v = v.Field(n)
 		}
 	}
+	v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 	//
 	return V(v), nil
 }
@@ -179,13 +185,21 @@ func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 	}
 	for fieldN, step := range p.plan {
 		v := p.value
-		for k, n := range step.Index {
-			if step.HasPointer && k < step.FinalIndex {
-				v, _ = Writable(v.Field(n))
-			} else {
+		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+			for _, n := range step.Index {
+				v = v.Field(n)
+				for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+					if v.IsNil() && v.CanSet() {
+						v.Set(reflect.New(v.Type().Elem()))
+					}
+				}
+			}
+		} else {
+			for _, n := range step.Index {
 				v = v.Field(n)
 			}
 		}
+		v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 		// NB  The value we want is v.Interface() which performs a number of allocations for built-in primitives.
 		//     If we switch off v's type as a pointer and it is a primitive we can skip the allocations.
 		switch ptr := v.Addr().Interface().(type) {
@@ -242,7 +256,7 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 	//
 	// Ensure p.plan has enough space and then reslice to empty.
 	if max := len(fields); max > cap(p.plan) {
-		p.plan = make([]preparedMappingField, 0, max)
+		p.plan = make([]path.ReflectPath, 0, max)
 	}
 	p.plan = p.plan[0:0]
 	//
@@ -252,16 +266,7 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 			p.err = ErrPlanInvalid
 			return fmt.Errorf("%w: %v", ErrUnknownField, field)
 		}
-		var index []int
-		for _, idx := range path.PathwayIndex {
-			index = append(index, idx...)
-		}
-		step := preparedMappingField{
-			Index:      index,
-			FinalIndex: len(index) - 1,
-			HasPointer: len(path.PathwayIndex) > 1,
-		}
-		p.plan = append(p.plan, step)
+		p.plan = append(p.plan, path)
 	}
 	//
 	p.err = nil
@@ -329,77 +334,82 @@ func (p *PreparedMapping) Set(value interface{}) error {
 		return p.err
 	}
 	//
-	var fieldValue reflect.Value
 	var err error
 	//
 	if err = p.next(); err != nil {
 		return err
 	}
 	//
+	v := p.value
 	step := p.plan[p.k]
-	fieldValue = p.value
-	for k, n := range step.Index {
-		if step.HasPointer && k < step.FinalIndex {
-			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
-			fieldValue, _ = Writable(fieldValue.Field(n))
-		} else {
-			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
-			fieldValue = fieldValue.Field(n)
+	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
+		for _, n := range step.Index {
+			v = v.Field(n)
+			for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+				if v.IsNil() && v.CanSet() {
+					v.Set(reflect.New(v.Type().Elem()))
+				}
+			}
+		}
+	} else {
+		for _, n := range step.Index {
+			v = v.Field(n)
 		}
 	}
+	v = v.Field(step.Last) // NB  End manual inline of path.ReflectPath.Value
 	//
 	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
 	// which will cut down our allocations and increase speed.
-	if fieldValue.Type() == reflect.TypeOf(value) {
+	if v.Type() == reflect.TypeOf(value) {
 		switch tt := value.(type) {
 		case bool:
-			fieldValue.SetBool(tt)
+			v.SetBool(tt)
 			return nil
 		case int:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int8:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int16:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int32:
-			fieldValue.SetInt(int64(tt))
+			v.SetInt(int64(tt))
 			return nil
 		case int64:
-			fieldValue.SetInt(tt)
+			v.SetInt(tt)
 			return nil
 		case uint:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint8:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint16:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint32:
-			fieldValue.SetUint(uint64(tt))
+			v.SetUint(uint64(tt))
 			return nil
 		case uint64:
-			fieldValue.SetUint(tt)
+			v.SetUint(tt)
 			return nil
 		case float32:
-			fieldValue.SetFloat(float64(tt))
+			v.SetFloat(float64(tt))
 			return nil
 		case float64:
-			fieldValue.SetFloat(tt)
+			v.SetFloat(tt)
 			return nil
 		case string:
-			fieldValue.SetString(tt)
+			v.SetString(tt)
 			return nil
 		}
 	}
 	//
 	// If the type-switch above didn't hit then we'll coerce the
 	// fieldValue to a *Value and use our swiss-army knife Value.To().
-	err = V(fieldValue).To(value)
+	err = V(v).To(value)
 	if err != nil && p.err == nil {
 		p.err = err // TODO Possibly wrap with more information.
 	}
