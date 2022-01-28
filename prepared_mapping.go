@@ -3,6 +3,7 @@ package set
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/nofeaturesonlybugs/set/path"
 )
@@ -16,9 +17,14 @@ var (
 	ErrPlanInvalid = fmt.Errorf("set: prepared mapping: plan invalid")
 )
 
-// preparedMappingField is a prepare field access.
+// preparedMappingField is used by PreparedMapping when building its prepared access plan.
+//
+// Internally PreparedMapping.Plan will utimately build a []preparedMappingField describing
+// the field access order.
 type preparedMappingField struct {
-	path.Path
+	Index      []int
+	FinalIndex int
+	HasPointer bool
 }
 
 // PreparedMapping is returned from Mapper's Prepare method.
@@ -46,7 +52,15 @@ type preparedMappingField struct {
 // specifying an access plan.  Methods that do not return an error can be called before
 // a plan has been specified.
 type PreparedMapping struct {
-	value *Value
+	// top is the original type used to create the value; it is needed to ensure type compatibility
+	// when calling Rebind.
+	// value is the bound value after passing through Writable to get to the end of any pointer chain.
+	top   reflect.Type
+	value reflect.Value
+
+	// valid=true means PreparedMapping is valid and bound to a writable value.
+	// valid=false means PreparedMapping is invalid and most calls should return err.
+	valid bool
 	err   error
 
 	// plan is the slice of steps created by Plan and
@@ -54,9 +68,6 @@ type PreparedMapping struct {
 	k    int
 	plan []preparedMappingField
 
-	// NB   indeces is obtained from Mapping.Indeces and is not a copy.
-	//      Treat as read only.
-	indeces map[string][]int
 	// NB	paths is obtained from Mapping.Paths and is not a copy.
 	//      Treat as read only.
 	paths map[string]path.Path
@@ -74,16 +85,22 @@ type PreparedMapping struct {
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
 func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
-	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+	if !p.valid {
 		return rv, p.err
 	}
-	var v reflect.Value
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
 	}
-	for n, path := range p.plan {
-		v = path.Value(p.value.WriteValue)
-		rv[n] = v.Addr().Interface()
+	for fieldN, step := range p.plan {
+		v := p.value
+		for k, n := range step.Index {
+			if step.HasPointer && k < step.FinalIndex {
+				v, _ = Writable(v.Field(n))
+			} else {
+				v = v.Field(n)
+			}
+		}
+		rv[fieldN] = v.Addr().Interface()
 	}
 	return rv, nil
 }
@@ -95,12 +112,13 @@ func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
 // it can be obtained by calling Copy on the cached PreparedMapping for that type.
 func (p PreparedMapping) Copy() PreparedMapping {
 	return PreparedMapping{
-		value:   p.value.Copy(),
-		err:     p.err,
-		k:       p.k,
-		plan:    append([]preparedMappingField(nil), p.plan...),
-		indeces: p.indeces,
-		paths:   p.paths,
+		top:   p.top,
+		value: p.value,
+		valid: p.valid,
+		err:   p.err,
+		k:     p.k,
+		plan:  append([]preparedMappingField(nil), p.plan...),
+		paths: p.paths,
 	}
 }
 
@@ -120,20 +138,25 @@ func (p PreparedMapping) Err() error {
 // exceeds the length of the plan then ErrPlanExceeded is returned.  Other
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Field() (*Value, error) {
-	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+	if !p.valid {
 		return nil, p.err
 	}
 	//
-	var fieldValue reflect.Value
-	var err error
-	//
-	if err = p.next(); err != nil {
+	if err := p.next(); err != nil {
 		return nil, err
 	}
 	//
-	path := p.plan[p.k].Path
-	fieldValue = path.Value(p.value.WriteValue)
-	return V(fieldValue), nil
+	step := p.plan[p.k]
+	v := p.value
+	for k, n := range step.Index {
+		if step.HasPointer && k < step.FinalIndex {
+			v, _ = Writable(v.Field(n))
+		} else {
+			v = v.Field(n)
+		}
+	}
+	//
+	return V(v), nil
 }
 
 // Fields returns a slice of values to the fields in the currently bound struct in the order
@@ -148,16 +171,57 @@ func (p *PreparedMapping) Field() (*Value, error) {
 // An example use-case would be obtaining a slice of query arguments by column name during
 // database queries.
 func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
-	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+	if !p.valid {
 		return rv, p.err
 	}
-	var v reflect.Value
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
 	}
-	for n, path := range p.plan {
-		v = path.Value(p.value.WriteValue)
-		rv[n] = v.Interface()
+	for fieldN, step := range p.plan {
+		v := p.value
+		for k, n := range step.Index {
+			if step.HasPointer && k < step.FinalIndex {
+				v, _ = Writable(v.Field(n))
+			} else {
+				v = v.Field(n)
+			}
+		}
+		// NB  The value we want is v.Interface() which performs a number of allocations for built-in primitives.
+		//     If we switch off v's type as a pointer and it is a primitive we can skip the allocations.
+		switch ptr := v.Addr().Interface().(type) {
+		case *bool:
+			rv[fieldN] = *ptr
+		case *int:
+			rv[fieldN] = *ptr
+		case *int8:
+			rv[fieldN] = *ptr
+		case *int16:
+			rv[fieldN] = *ptr
+		case *int32:
+			rv[fieldN] = *ptr
+		case *int64:
+			rv[fieldN] = *ptr
+		case *uint:
+			rv[fieldN] = *ptr
+		case *uint8:
+			rv[fieldN] = *ptr
+		case *uint16:
+			rv[fieldN] = *ptr
+		case *uint32:
+			rv[fieldN] = *ptr
+		case *uint64:
+			rv[fieldN] = *ptr
+		case *float32:
+			rv[fieldN] = *ptr
+		case *float64:
+			rv[fieldN] = *ptr
+		case *string:
+			rv[fieldN] = *ptr
+		case *time.Time:
+			rv[fieldN] = *ptr
+		default:
+			rv[fieldN] = v.Interface()
+		}
 	}
 	return rv, nil
 }
@@ -175,27 +239,35 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 	if p.err == ErrReadOnly {
 		return p.err
 	}
-	var path path.Path
-	var max int
-	var ok bool
-	//
-	p.err = nil
-	p.k = -1
 	//
 	// Ensure p.plan has enough space and then reslice to empty.
-	if max = len(fields); max > cap(p.plan) {
+	if max := len(fields); max > cap(p.plan) {
 		p.plan = make([]preparedMappingField, 0, max)
 	}
 	p.plan = p.plan[0:0]
 	//
 	for _, field := range fields {
-		if path, ok = p.paths[field]; !ok {
+		path, ok := p.paths[field]
+		if !ok {
 			p.err = ErrPlanInvalid
 			return fmt.Errorf("%w: %v", ErrUnknownField, field)
 		}
-		p.plan = append(p.plan, preparedMappingField{Path: path})
+		var index []int
+		for _, idx := range path.PathwayIndex {
+			index = append(index, idx...)
+		}
+		step := preparedMappingField{
+			Index:      index,
+			FinalIndex: len(index) - 1,
+			HasPointer: len(path.PathwayIndex) > 1,
+		}
+		p.plan = append(p.plan, step)
 	}
-	// TODO Rebuild cache for current object
+	//
+	p.err = nil
+	p.k = -1
+	p.valid = true
+	//
 	return nil
 }
 
@@ -210,10 +282,24 @@ func (p *PreparedMapping) Rebind(v interface{}) {
 	if p.err == ErrReadOnly {
 		return
 	}
+	//
+	// Allow reflect.Value to be passed directly.
+	var rv reflect.Value
+	switch sw := v.(type) {
+	case reflect.Value:
+		rv = sw
+	default:
+		rv = reflect.ValueOf(v)
+	}
+	T := rv.Type()
+	if p.top != T {
+		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", p.value.Interface(), v)) // TODO ErrRebind maybe?
+	}
+	//
 	p.err = nil
+	p.value, _ = Writable(rv)
+	//
 	p.k = -1
-	// TODO When refactoring this to remove p.value copy+paste the implementation in BoundMapping.
-	p.value.Rebind(v)
 }
 
 // next attempts to advance the internal counter by one.  If advancing the counter
@@ -239,7 +325,7 @@ func (p *PreparedMapping) next() error {
 // exceeds the length of the plan then ErrPlanExceeded is returned.  Other
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Set(value interface{}) error {
-	if p.err == ErrPlanInvalid || p.err == ErrReadOnly {
+	if !p.valid {
 		return p.err
 	}
 	//
@@ -250,8 +336,17 @@ func (p *PreparedMapping) Set(value interface{}) error {
 		return err
 	}
 	//
-	path := p.plan[p.k].Path
-	fieldValue = path.Value(p.value.WriteValue)
+	step := p.plan[p.k]
+	fieldValue = p.value
+	for k, n := range step.Index {
+		if step.HasPointer && k < step.FinalIndex {
+			// n is not the final index; therefore it is a nested/embedded struct and we might need to instantiate it.
+			fieldValue, _ = Writable(fieldValue.Field(n))
+		} else {
+			// n is the final index; it represents a scalar/leaf at the end of the nested struct hierarchy.
+			fieldValue = fieldValue.Field(n)
+		}
+	}
 	//
 	// If the types are directly equatable then we might be able to avoid creating a V(fieldValue),
 	// which will cut down our allocations and increase speed.

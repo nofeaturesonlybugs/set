@@ -264,22 +264,18 @@ func (me *Mapper) Map(T interface{}) Mapping {
 //
 // I must be an addressable type.
 func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
-	var v *Value
-	if tv, ok := I.(*Value); ok {
-		v = tv
-	} else {
-		v = V(I)
-	}
-	if !v.CanWrite {
+	value, writable := Writable(reflect.ValueOf(I))
+	if !writable {
 		return PreparedMapping{err: ErrReadOnly}, fmt.Errorf("%w: %T", ErrReadOnly, I)
 	}
-	mapping := me.Map(v)
+	//
+	mapping := me.Map(I)
 	//
 	rv := PreparedMapping{
-		value:   v,
-		err:     ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
-		indeces: mapping.Indeces,
-		paths:   mapping.Paths,
+		top:   reflect.TypeOf(I),
+		value: value,
+		err:   ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
+		paths: mapping.Paths,
 	}
 	return rv, nil
 }
