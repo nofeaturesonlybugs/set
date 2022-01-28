@@ -170,23 +170,42 @@ type Path struct {
 	ParentPathwayName string
 }
 
+// ReflectPath returns a condensed representation of Path purpose-built to
+// navigate the Path via reflect.
+//
+// Path contains a moderately excessive amount of information.  Discarding it
+// in favor of ReflectPath can lower the memory requirements of packages needing
+// this information and functionality.
+func (p Path) ReflectPath() ReflectPath {
+	var index []int
+	for _, indeces := range p.PathwayIndex {
+		index = append(index, indeces...)
+	}
+	n := len(index)
+	return ReflectPath{
+		HasPointer: len(p.PathwayIndex) > 1,
+		Index:      append([]int(nil), index[0:n-1]...),
+		Last:       index[n-1],
+	}
+}
+
 // String returns Path represented as a string.
 func (p Path) String() string {
 	return fmt.Sprintf("%v %v %v Type=%v Pathway[%v]%v Parent[%v] Offsets= %v", p.Name, p.Index, p.Offset, p.Type, p.PathwayName, PathIndeces(p.PathwayIndex), p.ParentPathwayName, PathOffsets(p.PathwayOffsets))
 }
 
 // Value returns the reflect.Value for the path from the origin value.
-func (p Path) Value(origin reflect.Value) reflect.Value {
-	for ; origin.Kind() == reflect.Ptr; origin = origin.Elem() {
+func (p Path) Value(v reflect.Value) reflect.Value {
+	for ; v.Kind() == reflect.Ptr; v = v.Elem() {
 		// Walk pointer chain if origin is a pointer
 	}
 	for _, index := range p.PathwayIndex {
-		origin = origin.FieldByIndex(index)
-		for ; origin.Kind() == reflect.Ptr; origin = origin.Elem() {
-			if origin.IsNil() && origin.CanSet() {
-				origin.Set(reflect.New(origin.Type().Elem()))
+		v = v.FieldByIndex(index)
+		for ; v.Kind() == reflect.Ptr; v = v.Elem() {
+			if v.IsNil() && v.CanSet() {
+				v.Set(reflect.New(v.Type().Elem()))
 			}
 		}
 	}
-	return origin
+	return v
 }
