@@ -6,7 +6,7 @@ import (
 	"github.com/nofeaturesonlybugs/set"
 )
 
-func BenchmarkValue(b *testing.B) { // TODO MOVE TO DIFFERENT FILE
+func BenchmarkValue(b *testing.B) {
 	type Common struct {
 		Id int
 	}

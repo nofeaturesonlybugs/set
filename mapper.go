@@ -7,6 +7,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nofeaturesonlybugs/set/path"
+)
+
+var (
+	// ErrUnknownField is returned by BoundMapping and PreparedMapping when given field
+	// has no correlating mapping within the struct hierarchy.
+	ErrUnknownField = fmt.Errorf("set: unknown field")
 )
 
 var mapperTreatAsScalar = map[reflect.Type]struct{}{
@@ -43,6 +51,15 @@ type Mapping struct {
 	// This field is provided as a convenience so you can map a struct and inspect
 	// field tags without having to use the reflect package yourself.
 	StructFields map[string]reflect.StructField
+
+	// ReflectPaths can be used to retrieve a path.ReflectPath by mapped name.
+	//
+	// A path.ReflectPath is slightly different and slightly more informative representation
+	// for a path than a plain []int.
+	ReflectPaths map[string]path.ReflectPath
+
+	// HasPointers will be true if any of the pathways traverse a field that is a pointer.
+	HasPointers bool
 }
 
 // Mapper creates Mapping instances from structs and struct hierarchies.
@@ -108,26 +125,25 @@ var DefaultMapper = &Mapper{
 // Bind creates a BoundMapping that is initially bound to I.
 //
 // BoundMappings are provided for performance critical code that needs to
-// populate many instances of the same type repeatedly.  For example
-// populating a []T with data from a CSV file or database results.
-// Create a single BoundMapping and for each successive T call Rebind(t)
-// to bind the mapping to the next instance.  Then use the Set()
-// method to set data.
-func (me *Mapper) Bind(I interface{}) BoundMapping {
-	var v *Value
-	if tv, ok := I.(*Value); ok {
-		v = tv
-	} else {
-		v = V(I)
+// read or mutate many instances of the same type repeatedly without constraint
+// on field access between instances.
+//
+// See documentation for BoundMapping for more details.
+//
+// I must be an addressable type.
+func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
+	value, writable := Writable(reflect.ValueOf(I))
+	if !writable {
+		return BoundMapping{err: ErrReadOnly}, fmt.Errorf("%w: %T", ErrReadOnly, I)
 	}
-	mapping := me.Map(v)
+	mapping := me.Map(I)
 	//
 	rv := BoundMapping{
-		value:   v,
-		err:     nil,
-		indeces: mapping.Indeces,
+		top:   reflect.TypeOf(I),
+		value: value,
+		paths: mapping.ReflectPaths,
 	}
-	return rv
+	return rv, nil
 }
 
 // Map adds T to the Mapper's list of known and recognized types.
@@ -156,14 +172,37 @@ func (me *Mapper) Map(T interface{}) Mapping {
 		return *(rv.(*Mapping))
 	}
 	//
+	// Create a more formal mapping from subpackage path.
+	paths := path.Stat(typeInfo.Type)
+	//
 	rv := &Mapping{
 		Keys:         []string{},
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
+		ReflectPaths: map[string]path.ReflectPath{},
 	}
 	//
-	var scan func(typeInfo TypeInfo, indeces []int, prefix string)
-	scan = func(typeInfo TypeInfo, indeces []int, prefix string) {
+	// add adds an entry to rv.
+	add := func(name string, index []int, field reflect.StructField, path path.Path) {
+		rv.Keys = append(rv.Keys, name)
+		rv.Indeces[name] = index
+		rv.StructFields[name] = field
+		rv.ReflectPaths[name] = path.ReflectPath()
+		if len(path.PathwayIndex) > 1 {
+			rv.HasPointers = true
+		}
+	}
+	//
+	// NB  fullpath is used to refer back into paths to obtain a path.Path for a mapped pathway.
+	//     Practically this is a bit slower than coalescing the logic of path.Stat into
+	//     this scan() function here.  Conceptually it's much easier to understand, support
+	//     and maintain.
+	var scan func(typeInfo TypeInfo, indeces []int, prefix string, fullpath string)
+	scan = func(typeInfo TypeInfo, indeces []int, prefix string, fullpath string) {
+		// Separate fullpath with underscore.
+		if fullpath != "" {
+			fullpath = fullpath + "."
+		}
 		for k, field := range typeInfo.StructFields {
 			if field.PkgPath != "" {
 				continue
@@ -200,21 +239,47 @@ func (me *Mapper) Map(T interface{}) Mapping {
 			}
 			nameIndeces := append(indeces, k)
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				add(name, nameIndeces, field, paths.Leaves[fullpath+field.Name])
 			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				add(name, nameIndeces, field, paths.Leaves[fullpath+field.Name])
 			} else if fieldTypeInfo.IsStruct {
-				scan(fieldTypeInfo, nameIndeces, name)
+				scan(fieldTypeInfo, nameIndeces, name, fullpath+field.Name)
 			} else if fieldTypeInfo.IsScalar {
-				rv.Keys, rv.Indeces[name], rv.StructFields[name] = append(rv.Keys, name), nameIndeces, field
+				add(name, nameIndeces, field, paths.Leaves[fullpath+field.Name])
 			}
 		}
 	}
 	// Scan and assign the result to our known types.
-	scan(typeInfo, []int{}, "")
+	scan(typeInfo, []int(nil), "", "")
 	me.known.Store(typeInfo.Type, rv)
 	//
 	return *rv
+}
+
+// Prepare creates a PreparedMapping that is initially bound to I.
+//
+// PreparedMappings are provided for performance critical code that needs to
+// read or mutate many instances of the same type repeatedly and for every
+// instance the same fields will be accessed in the same order.
+//
+// See documentation for PreparedMapping for more details.
+//
+// I must be an addressable type.
+func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
+	value, writable := Writable(reflect.ValueOf(I))
+	if !writable {
+		return PreparedMapping{err: ErrReadOnly}, fmt.Errorf("%w: %T", ErrReadOnly, I)
+	}
+	//
+	mapping := me.Map(I)
+	//
+	rv := PreparedMapping{
+		top:   reflect.TypeOf(I),
+		value: value,
+		err:   ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
+		paths: mapping.ReflectPaths,
+	}
+	return rv, nil
 }
 
 // Copy creates a copy of the Mapping.
@@ -223,10 +288,12 @@ func (me Mapping) Copy() Mapping {
 		Keys:         append([]string(nil), me.Keys...),
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
+		ReflectPaths: map[string]path.ReflectPath{},
 	}
 	for _, key := range me.Keys {
 		rv.Indeces[key] = append([]int(nil), me.Indeces[key]...)
 		rv.StructFields[key] = me.StructFields[key]
+		rv.ReflectPaths[key] = me.ReflectPaths[key]
 	}
 	return rv
 }

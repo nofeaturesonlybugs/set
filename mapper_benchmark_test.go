@@ -11,7 +11,7 @@ func BenchmarkMapper(b *testing.B) {
 	rowsDecoded, size := loadBenchmarkMapperData(b)
 	var jsonRows [][]byte
 	for _, decoded := range rowsDecoded {
-		if encoded, err := json.MarshalIndent(decoded, "", "\t"); err != nil {
+		if encoded, err := json.Marshal(decoded); err != nil {
 			b.Fatalf("During json.Marshal: %v", err.Error())
 		} else {
 			jsonRows = append(jsonRows, encoded)
@@ -93,7 +93,7 @@ func BenchmarkMapper(b *testing.B) {
 		Vendor   Vendor
 	}
 	//
-	b.Run("bound no rebind", func(b *testing.B) {
+	b.Run("Bind no Rebind", func(b *testing.B) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(Common{}, Timestamps{}),
 			Join:     "_",
@@ -102,11 +102,15 @@ func BenchmarkMapper(b *testing.B) {
 		var bound set.BoundMapping
 		var row MapperBenchmarkJsonRow
 		var k int
+		var err error
 		dest := make([]T, 100)
 		for n := 0; n < b.N; n++ {
 			k = n % size
 			row = rowsDecoded[k]
-			bound = mapper.Bind(&dest[k])
+			bound, err = mapper.Bind(&dest[k])
+			if err != nil {
+				b.Fatalf("Unable to bind: %v", err.Error())
+			}
 			//
 			bound.Set("Id", row.Id)
 			bound.Set("CreatedTime", row.CreatedTime)
@@ -130,10 +134,9 @@ func BenchmarkMapper(b *testing.B) {
 				b.Fatalf("Unable to set: %v", err.Error())
 			}
 		}
-
 	})
 	//
-	b.Run("bound rebind", func(b *testing.B) {
+	b.Run("Bind Rebind", func(b *testing.B) {
 		mapper := &set.Mapper{
 			Elevated: set.NewTypeList(Common{}, Timestamps{}),
 			Join:     "_",
@@ -142,7 +145,10 @@ func BenchmarkMapper(b *testing.B) {
 		var row MapperBenchmarkJsonRow
 		var k int
 		dest := make([]T, 100)
-		bound := mapper.Bind(&dest[0])
+		bound, err := mapper.Bind(&dest[0])
+		if err != nil {
+			b.Fatalf("Unable to bind: %v", err.Error())
+		}
 		for n := 0; n < b.N; n++ {
 			k = n % size
 			row = rowsDecoded[k]
@@ -170,7 +176,57 @@ func BenchmarkMapper(b *testing.B) {
 				b.Fatalf("Unable to set: %v", err.Error())
 			}
 		}
-
+	})
+	//
+	b.Run("Prepare Rebind", func(b *testing.B) {
+		mapper := &set.Mapper{
+			Elevated: set.NewTypeList(Common{}, Timestamps{}),
+			Join:     "_",
+		}
+		//
+		var row MapperBenchmarkJsonRow
+		var k int
+		dest := make([]T, 100)
+		prepared, err := mapper.Prepare(&dest[0])
+		if err != nil {
+			b.Fatalf("error preparing %v", err.Error())
+		}
+		err = prepared.Plan(
+			"Id", "CreatedTime", "ModifiedTime",
+			"Price", "Quantity", "Total",
+			"Customer_Id", "Customer_First", "Customer_Last",
+			"Vendor_Id", "Vendor_Name", "Vendor_Description", "Vendor_Contact_Id", "Vendor_Contact_First", "Vendor_Contact_Last")
+		if err != nil {
+			b.Fatalf("error preparing plan %v", err.Error())
+		}
+		for n := 0; n < b.N; n++ {
+			k = n % size
+			row = rowsDecoded[k]
+			prepared.Rebind(&dest[k])
+			//
+			//
+			prepared.Set(row.Id)
+			prepared.Set(row.CreatedTime)
+			prepared.Set(row.ModifiedTime)
+			prepared.Set(row.Price)
+			prepared.Set(row.Quantity)
+			prepared.Set(row.Total)
+			//
+			prepared.Set(row.CustomerId)
+			prepared.Set(row.CustomerFirst)
+			prepared.Set(row.CustomerLast)
+			//
+			prepared.Set(row.VendorId)
+			prepared.Set(row.VendorName)
+			prepared.Set(row.VendorDescription)
+			prepared.Set(row.VendorContactId)
+			prepared.Set(row.VendorContactFirst)
+			prepared.Set(row.VendorContactLast)
+			//
+			if err := prepared.Err(); err != nil {
+				b.Fatalf("Unable to set: %v", err.Error())
+			}
+		}
 	})
 }
 func BenchmarkMapperBaseline(b *testing.B) {

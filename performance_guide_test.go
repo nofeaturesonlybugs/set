@@ -108,7 +108,10 @@ func Benchmark_PerformanceGuide(b *testing.B) {
 					b.Run(nameAdjust("bound", TestWidth), func(b *testing.B) {
 						b.ResetTimer()
 						var err error
-						bound := mapper.Bind(typ.Value)
+						bound, err := mapper.Bind(typ.Value)
+						if err != nil {
+							b.Fatalf(err.Error())
+						}
 						for n := 0; n < b.N; n++ {
 							for k := 0; k < test.Iters; k++ {
 								err = bound.Set(typ.MappedName, 42)
@@ -123,7 +126,10 @@ func Benchmark_PerformanceGuide(b *testing.B) {
 						var err error
 						ptr := make([]interface{}, 1)
 						fields := []string{typ.MappedName}
-						bound := mapper.Bind(typ.Value)
+						bound, err := mapper.Bind(typ.Value)
+						if err != nil {
+							b.Fatalf(err.Error())
+						}
 						for n := 0; n < b.N; n++ {
 							for k := 0; k < test.Iters; k++ {
 								_, err = bound.Assignables(fields, ptr)
@@ -245,7 +251,10 @@ func Benchmark_PerformanceGuideDerefs(b *testing.B) {
 					b.Run(nameAdjust("bound", TestWidth), func(b *testing.B) {
 						b.ResetTimer()
 						var err error
-						bound := mapper.Bind(typ.Value)
+						bound, err := mapper.Bind(typ.Value)
+						if err != nil {
+							b.Fatalf(err.Error())
+						}
 						for n := 0; n < b.N; n++ {
 							for k := 0; k < test.Iters; k++ {
 								err = bound.Set(typ.MappedName, 42)
@@ -260,7 +269,10 @@ func Benchmark_PerformanceGuideDerefs(b *testing.B) {
 						var err error
 						ptr := make([]interface{}, 1)
 						fields := []string{typ.MappedName}
-						bound := mapper.Bind(typ.Value)
+						bound, err := mapper.Bind(typ.Value)
+						if err != nil {
+							b.Fatalf(err.Error())
+						}
 						for n := 0; n < b.N; n++ {
 							for k := 0; k < test.Iters; k++ {
 								_, err = bound.Assignables(fields, ptr)
