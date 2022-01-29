@@ -41,38 +41,47 @@ func (t Tree) Slice() []Path {
 
 // String returns the Tree represented as a string.
 func (t Tree) String() string {
-	// ↓↓↓ TODO RM Should be impossible for branches to outnumber leaves ↓↓↓
-	// var keys []string
-	// if a, b := len(t.Branches), len(t.Leaves); a > b {
-	// 	keys = make([]string, 0, a)
-	// } else {
-	// 	keys = make([]string, 0, b)
-	// }
-	// ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
-	keys := make([]string, 0, len(t.Leaves))
+	return t.StringIndent("\t")
+}
+
+// String returns the Tree represented as a string.
+func (t Tree) StringIndent(indent string) string {
 	rv := strings.Builder{}
+	paths := make([]Path, 0, len(t.Leaves))
+	//
+	for _, br := range t.Branches {
+		paths = append(paths, br)
+	}
+	sort.Sort(Paths(paths))
 
 	rv.WriteString("Branches\n")
-	for key := range t.Branches {
-		keys = append(keys, key)
+	for _, br := range paths {
+		in := strings.Repeat(indent, strings.Count(br.PathwayName, ".")+1)
+		rv.WriteString(fmt.Sprintf("%v%v = %v\n", in, br.PathwayName, br))
 	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		rv.WriteString(fmt.Sprintf("\t%v = %v\n", key, t.Branches[key]))
-	}
+	paths = paths[0:0]
 
 	rv.WriteString("Leaves\n")
-	keys = keys[0:0]
-	for key := range t.Leaves {
-		keys = append(keys, key)
+	for _, leaf := range t.Leaves {
+		paths = append(paths, leaf)
 	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		rv.WriteString(fmt.Sprintf("\t%v = %v\n", key, t.Leaves[key]))
+	sort.Sort(Paths(paths))
+	for _, leaf := range paths {
+		in := strings.Repeat(indent, strings.Count(leaf.PathwayName, ".")+1)
+		rv.WriteString(fmt.Sprintf("%v%v = %v\n", in, leaf.PathwayName, leaf))
 	}
 	return rv.String()
 }
 
+// Stat inspects the incoming value to build a Tree which consists of two sets of Paths
+// -- branches and leaves.
+//
+// The incoming value must be a struct, ptr-to-struct, or ptr-chain-to-struct.
+//
+// Leaves are final fields in the struct that can be traversed no further.  If a field
+// is a struct with no exported fields then it is a leaf.
+//
+// Branches are fields that are structs or embedded structs that can be traversed deeper.
 func Stat(v interface{}) Tree {
 	t := Tree{
 		Leaves:   map[string]Path{},
@@ -85,8 +94,8 @@ func Stat(v interface{}) Tree {
 		Path
 	}
 	//
-	var stat func(v interface{}, depth int, parent Meta) int
-	stat = func(v interface{}, depth int, parent Meta) int {
+	var stat func(v interface{}, parent Meta) int
+	stat = func(v interface{}, parent Meta) int {
 		var T reflect.Type
 		switch vv := v.(type) {
 		case reflect.Type:
@@ -97,16 +106,10 @@ func Stat(v interface{}) Tree {
 				T = T.Elem()
 			}
 		}
-		// ↓↓↓ TODO RM ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-		// if depth == 0 {
-		// 	fmt.Println(T)
-		// 	depth++
-		// }
-		// ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 		if T.Kind() != reflect.Struct {
 			return 0
 		}
-		// indent := strings.Repeat("\t", depth) // TODO RM for printing
+		//
 		fields := make([]Path, 0, T.NumField())
 		for fieldIndex, size := 0, T.NumField(); fieldIndex < size; fieldIndex++ {
 			F := T.Field(fieldIndex)
@@ -187,11 +190,8 @@ func Stat(v interface{}) Tree {
 			}
 			fields = append(fields, m.Path)
 			//
-			// Print for debugging
-			// fmt.Printf("%v%v\n", indent, m) //TODO RM
-			//
 			// Process this field type.
-			children := stat(m.EndType, depth+1, m)
+			children := stat(m.EndType, m)
 			if children == 0 {
 				t.Leaves[m.PathwayName] = m.Path
 			} else {
@@ -200,6 +200,6 @@ func Stat(v interface{}) Tree {
 		}
 		return len(fields)
 	}
-	stat(v, 0, Meta{})
+	stat(v, Meta{})
 	return t
 }
