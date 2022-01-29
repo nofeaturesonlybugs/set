@@ -1,5 +1,5 @@
 // Package set is a performant reflect wrapper supporting loose type conversion,
-// struct mapping, and struct populating facilities.
+// struct mapping and population, and slice building.
 //
 // Data Types
 //
@@ -131,7 +131,7 @@
 //
 // Struct Mapping
 //
-// Struct and struct hierarchies can be mapped to a flat list of string keys.  This is commonly useful
+// Struct and struct hierarchies can be mapped to a flat list of string keys.  This is useful
 // for deserializers and unmarshalers that need to convert a friendly string such as a column name or
 // environment variable and use it to locate a target field within a struct or its hierarchy.
 //
@@ -140,17 +140,22 @@
 // Mapping, BoundMapping, and PreparedMapping
 //
 // Once an instance of Mapper is created it can be used to create Mapping, BoundMapping, and
-// PreparedMapping instances that describe struct-types T.
-//
-// Mapping is a collection of values that can be used if you need to write your own algorithms
-// or types that traverse and populate instances of T.
+// PreparedMapping instances that facilitate struct traversal and population.
 //
 // BoundMapping and PreparedMapping are specialized types that bind to an instance of T
-// and allow specialized and performant access to T's fields or values.  BoundMapping and
-// PreparedMapping instances can be reused and bound to a new value T by calling the
-// Rebind method.
+// and allow performant access to T's fields or values.
 //
 // See examples for Mapper.Bind and Mapper.Prepare.
+//
+// In tight-loop scenarios an instance of BoundMapping or PreparedMapping can be bound
+// to a new instance T with the Rebind method.
+//
+// See examples for BoundMapping.Rebind and PreparedMapping.Rebind.
+//
+// If neither BoundMapping nor PreparedMapping are suitable for your use case you can
+// call Mapper.Map to get a general collection of data in a Mapping.  The data in a Mapping
+// may be helpful for creating your own traversal or population algorithm without having
+// to dive into all the complexities of the reflect package.
 //
 // BoundMapping vs PreparedMapping
 //
@@ -159,7 +164,7 @@
 // a map of string keys that target fields within the hierarchy.
 //
 // PreparedMapping requires an access plan to be set by calling the Plan method.  Once set
-// the bound value's fields must be set and accessed in the order described by the plan.  A
+// the bound value's fields must be set or accessed in the order described by the plan.  A
 // PreparedMapping is similar to a prepared SQL statement.
 //
 // Of the two PreparedMapping yields better performance.  You should use PreparedMapping
