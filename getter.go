@@ -18,8 +18,9 @@ func (me GetterFunc) Get(name string) interface{} {
 	return me(name)
 }
 
-// MapGetter accepts a map and returns a Getter.  Map keys need to be either interface{}
-// or string; i.e. the map needs to be of type map[string]* or map[interface{}]*.
+// MapGetter accepts a map and returns a Getter.
+//
+// Map keys must be string or interface{}.
 func MapGetter(m interface{}) Getter {
 	rv := GetterFunc(func(key string) interface{} { return nil })
 	//
