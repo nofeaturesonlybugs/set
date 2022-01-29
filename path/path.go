@@ -182,6 +182,11 @@ func (p Path) ReflectPath() ReflectPath {
 		index = append(index, indeces...)
 	}
 	n := len(index)
+	if n == 0 {
+		// If index is empty then this is an in valid value; Last is set to -1
+		// to ensure any attempt to call reflect.Value.Field(Last) panics.
+		return ReflectPath{Last: -1}
+	}
 	return ReflectPath{
 		HasPointer: len(p.PathwayIndex) > 1,
 		Index:      append([]int(nil), index[0:n-1]...),
