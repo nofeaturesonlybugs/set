@@ -1,9 +1,5 @@
-// Package set is a small wrapper around the official reflect package that facilitates loose type conversion,
-// assignment into native Go types, and utilities to populate deeply nested Go structs.
-//
-// Todo
-//
-// TODO: Write or rewrite section on addressable types.
+// Package set is a performant reflect wrapper supporting loose type conversion,
+// struct mapping, and struct populating facilities.
 //
 // Data Types
 //
@@ -16,25 +12,6 @@
 //	bool, float, int, uint, & string
 //	pointer to any of the above; e.g: *bool, *float, *int, etc
 //	nested pointer to any of the above; e.g: ***bool, *****string, etc
-//
-// Package Name Collision
-//
-// I called this package `set` because I like typing short identifiers and I don't really use
-// packages that implement logical set operations such as union or intersection.
-//
-// I also like the semantics of typing: set.V().To() // i.e. set value to
-//
-// If you find yourself dealing with name collision here are some alternate imports
-// that are still short and keep the semantics (with varying success):
-//	import (
-//		assign "github.com/nofeaturesonlybugs/set"
-//		accept "github.com/nofeaturesonlybugs/set"
-//		coerce "github.com/nofeaturesonlybugs/set"
-//		from "github.com/nofeaturesonlybugs/set"
-//		make "github.com/nofeaturesonlybugs/set"
-//		pin "github.com/nofeaturesonlybugs/set"
-//		will "github.com/nofeaturesonlybugs/set"
-//	)
 //
 // Basic Type Coercion
 //
@@ -144,153 +121,59 @@
 //	s = []string{ "42", "24", "Hello!" }
 //	set.V(&t).To(s) // t is []int{} because "Hello" can not coerce.
 //
+// Populating Structs by Lookup Function
 //
-// Populating Structs with Value.Fill() and a Getter
+// See examples for GetterFunc.
 //
-// Structs can be populated by using Value.Fill() and a Getter; note the function is type casted to
-// a set.GetterFunc.
-//	// An example getter.
-//	myGetter := set.GetterFunc(func( name string ) interface{} {
-// 		switch name {
-// 		case "Name":
-// 			return "Bob"
-// 		case "Age":
-// 			return "42"
-// 		default:
-// 			return nil
-//		}
-//	})
+// Populating Structs by Map
 //
-// Populating a struct by field; i.e. the struct field names are the names passed to the Getter:
-// 	type T struct {
-// 		Name string
-// 		Age uint
-// 	}
-// 	var t T
-// 	set.V(&t).Fill(myGetter)
+// See example for MapGetter.
 //
-// Populating a struct by struct tag; i.e. if the struct tag exists on the field then the tag's value
-// is passed to the Getter:
-// 	type T struct {
-// 		SomeField string `key:"Name"`
-// 		OtherField uint `key:"Age"`
-// 	}
-// 	var t T
-// 	set.V(&t).FillByTag("key", myGetter)
+// Struct Mapping
 //
-// Populating Nested Structs with Value.Fill() and a Getter
+// Struct and struct hierarchies can be mapped to a flat list of string keys.  This is commonly useful
+// for deserializers and unmarshalers that need to convert a friendly string such as a column name or
+// environment variable and use it to locate a target field within a struct or its hierarchy.
 //
-// To populate nested structs a Getter needs to return a Getter for the given name:
-// 	myGetter := set.GetterFunc(func(key string) interface{} {
-// 		switch key {
-// 		case "name":
-// 			return "Bob"
-// 		case "age":
-// 			return "42"
-// 		case "address":
-// 			return set.GetterFunc(func(key string) interface{} {
-// 				switch key {
-// 				case "street1":
-// 					return "97531 Some Street"
-// 				case "street2":
-// 					return ""
-// 				case "city":
-// 					return "Big City"
-// 				case "state":
-// 					return "ST"
-// 				case "zip":
-// 					return "12345"
-// 				default:
-// 					return nil
-// 				}
-// 			})
-// 		default:
-// 			return nil
-// 		}
-// 	})
+// See examples for Mapper.
 //
-// Using the Getter above:
-// 	type Address struct {
-// 		Street1 string `key:"street1"`
-// 		Street2 string `key:"street2"`
-// 		City    string `key:"city"`
-// 		State   string `key:"state"`
-// 		Zip     string `key:"zip"`
-// 	}
-// 	type Person struct {
-// 		Name    string  `key:"name"`
-// 		Age     uint    `key:"age"`
-// 		Address Address `key:"address"`
-// 	}
-// 	var t Person
-// 	set.V(&t).FillByTag("key", myGetter)
+// Mapping, BoundMapping, and PreparedMapping
 //
-// Maps as Getters
+// Once an instance of Mapper is created it can be used to create Mapping, BoundMapping, and
+// PreparedMapping instances that describe struct-types T.
 //
-// A more practical source of data for a Getter might be a map.  To use a map as a Getter the map key has
-// to be assignable to string; e.g: string or interface{}.  If the map contains nested maps that also meet
-// the criteria for becoming a Getter then those maps can be used to populate nested structs.
+// Mapping is a collection of values that can be used if you need to write your own algorithms
+// or types that traverse and populate instances of T.
 //
-// 	m := map[string]interface{}{
-// 		"name": "Bob",
-// 		"age":  42,
-// 		"address": map[interface{}]string{
-// 			"street1": "97531 Some Street",
-// 			"street2": "",
-// 			"city":    "Big City",
-// 			"state":   "ST",
-// 			"zip":     "12345",
-// 		},
-// 	}
-// 	myGetter := set.MapGetter(m)
+// BoundMapping and PreparedMapping are specialized types that bind to an instance of T
+// and allow specialized and performant access to T's fields or values.  BoundMapping and
+// PreparedMapping instances can be reused and bound to a new value T by calling the
+// Rebind method.
 //
-// 	type Address struct {
-// 		Street1 string `key:"street1"`
-// 		Street2 string `key:"street2"`
-// 		City    string `key:"city"`
-// 		State   string `key:"state"`
-// 		Zip     string `key:"zip"`
-// 	}
-// 	type Person struct {
-// 		Name    string  `key:"name"`
-// 		Age     uint    `key:"age"`
-// 		Address Address `key:"address"`
-// 	}
-// 	var t Person
-// 	set.V(&t).FillByTag("key", myGetter)
+// See examples for Mapper.Bind and Mapper.Prepare.
 //
-// Populating Structs with Mapper, Mapping, and BoundMap
+// BoundMapping vs PreparedMapping
 //
-// If you need to populate or traverse structs using strings as lookups consider using a Mapper.  A Mapper traverses a type T
-// and generates a Mapping which contains members to facilitate accessing struct field indeces with strings.
+// BoundMapping allows adhoc access to the bound struct T.  You can set or retrieve fields in
+// any order.  Conceptually a BoundMapping is similar to casting a struct and its hierarchy into
+// a map of string keys that target fields within the hierarchy.
 //
-// When you index into Mapping.Indeces you will receive a slice of ints representing the indeces into the nested structure
-// to the desired field.
+// PreparedMapping requires an access plan to be set by calling the Plan method.  Once set
+// the bound value's fields must be set and accessed in the order described by the plan.  A
+// PreparedMapping is similar to a prepared SQL statement.
 //
-// For convenience a Mapper can create a BoundMapping which binds the Mapping to an instance of T.  The BoundMapping
-// can then be used to update the data within the instance.  See the BoundMapping examples.
+// Of the two PreparedMapping yields better performance.  You should use PreparedMapping
+// when you know every bound value will have its fields accessed in a determinate order.  If
+// fields will not be accessed in a determinate order then you should use a BoundMapping.
 //
-// Rebinding
+// BoundMapping methods require the field(s) as arguments; in some ways
+// this can help with readability as your code will read:
+//	b.Set("FooField", "Hello")
+//	b.Set("Number", 100)
 //
-// Both Value and BoundMapping support Rebind().  There is an amount of overhead instantiating either
-// Value or BoundMapping and most of that overhead occurs with type introspection via reflect.  In tight-loop situations
-// where either *Value or BoundMapping are used to alter many values of the same type this overhead
-// can be costly and is unnecessary since the first *Value or BoundMapping already contains the type information.
-//
-// For optimal performance in tight loop situations create a single instance of *Value or BoundMapping and then
-// call Rebind() with a new instance of data you wish to manipulate.
-//
-// For example change:
-//	for _, value := range someSliceOfTypeT {
-//		v := set.V( &value )			// <-- Expensive -- type information gathered for each instance created.
-//		// do something with v
-//	}
-// to:
-//	v := set.Value( &T{} ) // Create v once!
-//	for _, value := range someSliceOfTypeT {
-//		v.Rebind( &value ) // <-- Reuses existing type information -- more performant!
-//		// do something with v
-//	}
+// whereas code using PreparedMapping will read:
+//	p.Set("Hello")
+//	p.Set(100)
 //
 // Examples Subdirectory
 //
