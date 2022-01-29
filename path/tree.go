@@ -41,13 +41,14 @@ func (t Tree) Slice() []Path {
 
 // String returns the Tree represented as a string.
 func (t Tree) String() string {
-	// TODO RM Should be impossible for branches to outnumber leaves
+	// ↓↓↓ TODO RM Should be impossible for branches to outnumber leaves ↓↓↓
 	// var keys []string
 	// if a, b := len(t.Branches), len(t.Leaves); a > b {
 	// 	keys = make([]string, 0, a)
 	// } else {
 	// 	keys = make([]string, 0, b)
 	// }
+	// ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 	keys := make([]string, 0, len(t.Leaves))
 	rv := strings.Builder{}
 
@@ -96,10 +97,12 @@ func Stat(v interface{}) Tree {
 				T = T.Elem()
 			}
 		}
-		// if depth == 0 { //TODO RM
-		// 	fmt.Println(T) //TODO RM
-		// 	depth++        //TODO RM
-		// } //TODO RM
+		// ↓↓↓ TODO RM ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+		// if depth == 0 {
+		// 	fmt.Println(T)
+		// 	depth++
+		// }
+		// ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 		if T.Kind() != reflect.Struct {
 			return 0
 		}
@@ -119,7 +122,7 @@ func Stat(v interface{}) Tree {
 					Offset:            F.Offset,
 					Name:              F.Name,
 					ParentPathwayName: parent.PathwayName,
-					PathwayName:       strings.TrimPrefix(parent.PathwayName+"."+F.Name, "."), // TODO Better way
+					PathwayName:       strings.TrimPrefix(parent.PathwayName+"."+F.Name, "."),
 					Type:              F.Type,
 				},
 			}
@@ -135,17 +138,13 @@ func Stat(v interface{}) Tree {
 				// Copy the parent's pathway index.
 				m.PathwayIndex = make([][]int, len(parent.PathwayIndex))
 				for s, slice := range parent.PathwayIndex {
-					// TODO RM This seems to be a lefter over from when a nil could be present.
+					// ↓↓↓ TODO RM This seems to be a lefter over from when a nil could be present. ↓↓↓↓
 					// if slice == nil { // Duplicate nils exactly.
 					// 	m.PathwayIndex[s] = nil
 					// 	continue
 					// }
+					// ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 					m.PathwayIndex[s] = append([]int(nil), slice...)
-					// TODO RM
-					// m.PathwayIndex[s] = make([]int, len(slice))
-					// for k, v := range slice {
-					// 	m.PathwayIndex[s][k] = v
-					// }
 				}
 				// Copy the parent's pathway offsets.
 				m.PathwayOffsets = append([]PathOffsetSegment(nil), parent.PathwayOffsets...)
