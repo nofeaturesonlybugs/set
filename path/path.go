@@ -3,118 +3,40 @@ package path
 import (
 	"fmt"
 	"reflect"
-	"strings"
 )
 
-// PathOffsetSegment describes a segment of a Path when traversed via pointer arithmetic.
-type PathOffsetSegment struct {
-	// Offset is the total offset from the memory address of the
-	// struct at the top of the struct hierarchy for this specific
-	// segment.
-	//
-	//                      Address
-	//	A struct            0xabab                # Top
-	//	    B struct        0xabab + Offset(B)    # A is top.
-	//	        C struct    0xabab + Offset(C)    # A is top.
-	//
-	// A and its members are contiguous regions of memory.  All Offsets
-	// are calculated from A's memory address.
-	//
-	//                      Address
-	//	X struct            0xeded                                     # Top
-	//	    *Y struct       0xeded + Offset(Y) -> 0xeeee               # A is top; pointer begins new hierarchy at Y.
-	//	        M                                 0xeeee + Offset(M)   #   Y is top.
-	//	        N                                 0xeeee + Offset(N)   #   Y is top.
-	//
-	// X's hierarchy is segmented by the pointer at *Y.  Therefore Y's Offset
-	// is calculated from X's memory address **but** the Offsets for
-	// M and N are added to Y's address to obtain their locations.
-	Offset uintptr
+// Paths is a slice of Path.
+type Paths []Path
 
-	// IndirectionLevel determines if the field at Offset is a pointer or not.
-	//
-	// IndirectionLevel=0 means field is not a pointer.
-	// IndirectionLevel=1 means field is a pointer with a single level of indirection.
-	// IndirectionLevel>2 means field is a pointer with multiple levels of indirection.
-	//
-	//                  IndirectionLevel
-	//	A struct                0        *(&A + Offset) -> is not a pointer
-	//      B struct            0        *(&A + Offset) -> is not a pointer
-	//          C struct        0        *(&A + Offset) -> is not a pointer.
-	//
-	//	X struct                0        *(&A + Offset) -> is not a pointer.
-	//      *Y struct           1        *(&A + Offset) -> is *Y, pointer with single level of indirection.
-	//     **Z struct           2        *(&A + Offset) -> is **Z, pointer with 2 levels of indirection.
-	IndirectionLevel int
-
-	// Type and EndType describe the type(s) located at Offset.
-	//
-	// IndirectionLevel=0 means Type and EndType are the same type.
-	// IndirectionLevel>0 means Type is the pointer's type and EndType
-	// is the type at the end of the pointer chain.
-	//
-	//                          Type     EndType
-	//	A struct                A        A
-	//      B struct            B        B
-	//          C struct        C        C
-	//
-	//	X struct                X        X
-	//      *Y struct          *Y        Y
-	//     **Z struct         **Z        Z
-	Type    reflect.Type
-	EndType reflect.Type
+// Len returns the length of Paths.
+func (p Paths) Len() int {
+	return len(p)
 }
 
-// String returns the string description.
-func (s PathOffsetSegment) String() string {
-	if s.IndirectionLevel == 0 {
-		return fmt.Sprintf("+%v ∴ %v", s.Offset, s.Type)
+// Less returns true if the value at a is less than b.
+func (p Paths) Less(a, b int) bool {
+	var m, n []int
+	for _, slice := range p[a].PathwayIndex {
+		m = append(m, slice...)
 	}
-	return fmt.Sprintf("+%v ↬ %v ∴ %v", s.Offset, s.IndirectionLevel, s.EndType)
+	for _, slice := range p[b].PathwayIndex {
+		n = append(n, slice...)
+	}
+	N := len(n)
+	for k, v := range m {
+		if k < N {
+			if v == n[k] {
+				continue
+			}
+			return v < n[k]
+		}
+	}
+	return false
 }
 
-// PathOffsets is a slice of PathOffsetSegment.
-type PathOffsets []PathOffsetSegment
-
-// String returns the string description.
-func (o PathOffsets) String() string {
-	n := len(o)
-	if n == 0 {
-		return "<empty>"
-	}
-	parts := make([]string, n)
-	for k, part := range o {
-		parts[k] = part.String()
-	}
-	return strings.Join(parts, " ∪ ")
-}
-
-// PathIndeces is a [][]int, where the inner []int would be appropriate
-// for passing to reflect.Value.FieldByIndex([]int) to select a nested
-// field.
-//
-// A caveat of reflect.Value.FieldByIndex() is that it doesn't automatically
-// instantiate intermediate fields that may be pointers.  Any field that is
-// a pointer effectively breaks or segments the original []int into a pair of []int
-// with one on each side of the pointer.  As a result this package stores the PathIndeces
-// as [][]int.
-//
-// If len(PathIndeces)==1 then the pathway is contiguous as described in the
-// documentation for PathOffsetSegment and a single call of
-// reflect.Value.FieldByIndex(Indeces[0]) is enough to obtain the field.
-type PathIndeces [][]int
-
-// String returns the string description.
-func (i PathIndeces) String() string {
-	n := len(i)
-	if n == 0 {
-		return "<empty>"
-	}
-	parts := make([]string, n)
-	for k, slice := range i {
-		parts[k] = fmt.Sprintf("%v", slice)
-	}
-	return strings.Join(parts, " ∪ ")
+// Swap swaps element a with element b.
+func (p Paths) Swap(a, b int) {
+	p[a], p[b] = p[b], p[a]
 }
 
 // A Path represents a traversal from an originating struct to an accessible
@@ -161,10 +83,27 @@ type Path struct {
 	// Type is the field's reflect.Type.
 	Type reflect.Type
 
-	// TODO+NB Information describing the pathway to this struct field.
-	PathwayOffsets []PathOffsetSegment // TODO+NB Describe me.
-	PathwayIndex   [][]int             // Slice of indeces leading to this path; appropriate for reflect.Value.FieldByIndex()
-	PathwayName    string              // The joined named of the pathway.
+	// PathwayIndex represents the pathway when traversed by field index.
+	//
+	// The inner slice represents field indexes when calling reflect.Value.Field(n).
+	// The outer slice represents breaks in the indexes where a pointer occurs.
+	//
+	// len(PathwayIndex)=1 means there are no pointers in this pathway and
+	// reflect.Value.FieldByIndex(PathwayIndex[0]) can reach the field directly.
+	PathwayIndex [][]int
+
+	// PathwayOffsets represents the pathway when traversed by pointer arithmetic.
+	//
+	// Each PathOffsetSegment describes the memory offset from the struct's beginning
+	// memory, followed by the number of pointer-indirections required to reach the
+	// final type.
+	//
+	// len(PathwayOffsets)=1 means there are pointers and a single pointer addition
+	// from the beginning of the struct's memory will yield the field.
+	PathwayOffsets []PathOffsetSegment
+
+	// The full pathway name with nested structs or fields joined by a DOT or PERIOD.
+	PathwayName string
 
 	// ParentPathwayName is the pathway name of the parent.
 	ParentPathwayName string
