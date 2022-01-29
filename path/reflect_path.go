@@ -4,27 +4,14 @@ import (
 	"reflect"
 )
 
-// ReflectPath contains the bare minimum information to safely traverse
+// ReflectPath contains the bare minimum information to traverse
 // a path from an origin to the value described by Index+Last.
 //
-// NB  If a full index is []int{1,2,3,4} then it is stored in this type as
+// If a full index is []int{1,2,3,4} then it is stored in this type as
 //	Index  = []int{1,2,3}
-//  Last   = 4
+//	Last   = 4
+//	// See the source code for Value for the reasoning behind this decision.
 //
-// When iterating Index we instantiate and follow any nil pointers except
-// the reflect.Value for the last index:
-//   lastK := len(Index)-1 // necessary if Index has **all** elements.
-//   for k, n := range Index {
-//       if k < lastK && HasPointer {
-//           v = v.Field(n)
-//           // possibly create pointer
-//           continue
-//       }
-//       v = v.Field(n)
-//   }
-//
-// By storing the last true index in Last we no longer need to know len(Index)
-// or make a comparison during every iteration.
 type ReflectPath struct {
 	HasPointer bool
 	Index      []int
@@ -57,4 +44,28 @@ func (p ReflectPath) Value(v reflect.Value) reflect.Value {
 		}
 	}
 	return v.Field(p.Last)
+	// NB  If p.Index stored the full indeces and p.Last was not a struct
+	//     member then the above loops would be written as:
+	// 			final:=len(p.Index)-1
+	// 			for k, n := range p.Index {
+	// 				if k < final {
+	//					// When k < final we are not at the final field and might encounter
+	//					// a pointer or pointer chain.
+	// 					v = v.Field(n)
+	// 					// check nil pointer and instantiate bit
+	// 					continue
+	// 				}
+	// 				v = v.Field(n)
+	// 			}
+	// This requires
+	//	- Call to len(p.Index)
+	//	- k < final check for every iteration
+	//
+	// len(p.Index) could be cached as a struct field, in which case the struct
+	// gains an extra int member.
+	//
+	// Instead of adding [len(p.Index)] as a struct member I've opted to
+	// use that int to store the last true element from the []int index.
+	// This allows the [for...range] to skip the check for [if k < final]
+	// altogether.
 }
