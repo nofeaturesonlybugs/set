@@ -52,8 +52,11 @@ type Mapping struct {
 	// field tags without having to use the reflect package yourself.
 	StructFields map[string]reflect.StructField
 
-	// Paths is a much more detailed repository of pathways in the struct hierarchy.
-	Paths map[string]path.Path
+	// ReflectPaths can be used to retrieve a path.ReflectPath by mapped name.
+	//
+	// A path.ReflectPath is slightly different and slightly more informative representation
+	// for a path than a plain []int.
+	ReflectPaths map[string]path.ReflectPath
 
 	// HasPointers will be true if any of the pathways traverse a field that is a pointer.
 	HasPointers bool
@@ -138,10 +141,7 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	rv := BoundMapping{
 		top:   reflect.TypeOf(I),
 		value: value,
-		paths: map[string]path.ReflectPath{},
-	}
-	for k, p := range mapping.Paths {
-		rv.paths[k] = p.ReflectPath()
+		paths: mapping.ReflectPaths,
 	}
 	return rv, nil
 }
@@ -179,7 +179,7 @@ func (me *Mapper) Map(T interface{}) Mapping {
 		Keys:         []string{},
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
-		Paths:        map[string]path.Path{},
+		ReflectPaths: map[string]path.ReflectPath{},
 	}
 	//
 	// add adds an entry to rv.
@@ -187,7 +187,7 @@ func (me *Mapper) Map(T interface{}) Mapping {
 		rv.Keys = append(rv.Keys, name)
 		rv.Indeces[name] = index
 		rv.StructFields[name] = field
-		rv.Paths[name] = path
+		rv.ReflectPaths[name] = path.ReflectPath()
 		if len(path.PathwayIndex) > 1 {
 			rv.HasPointers = true
 		}
@@ -277,10 +277,7 @@ func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
 		top:   reflect.TypeOf(I),
 		value: value,
 		err:   ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
-		paths: map[string]path.ReflectPath{},
-	}
-	for k, p := range mapping.Paths {
-		rv.paths[k] = p.ReflectPath()
+		paths: mapping.ReflectPaths,
 	}
 	return rv, nil
 }
@@ -291,12 +288,12 @@ func (me Mapping) Copy() Mapping {
 		Keys:         append([]string(nil), me.Keys...),
 		Indeces:      map[string][]int{},
 		StructFields: map[string]reflect.StructField{},
-		// TODO Paths:
+		ReflectPaths: map[string]path.ReflectPath{},
 	}
 	for _, key := range me.Keys {
 		rv.Indeces[key] = append([]int(nil), me.Indeces[key]...)
 		rv.StructFields[key] = me.StructFields[key]
-		// TODO Copy rv.Paths
+		rv.ReflectPaths[key] = me.ReflectPaths[key]
 	}
 	return rv
 }
@@ -322,6 +319,5 @@ func (me Mapping) String() string {
 		parts = append(parts, fmt.Sprintf("%v\t\t%v", indeces, str))
 	}
 	sort.Strings(parts)
-	// TODO Paths?
 	return strings.Join(parts, "\n")
 }
