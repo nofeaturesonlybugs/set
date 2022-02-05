@@ -41,6 +41,8 @@
         to deserialize data into a caller-provided slice can use SlicePtr to simplify validating
         the destination as well as element creation and addition to the []T.        
 
+    + Add coerce subpackage.
+
 0.4.0
     + set.Mapper
         + Add TaggedFieldsOnly field.
