@@ -497,7 +497,7 @@ func (me *Value) To(arg interface{}) error {
 		//
 		if (T == me.Type || T.AssignableTo(me.Type)) && me.Kind != reflect.Slice {
 			// NB  We checked that me.Kind is not a slice because this package always makes a copy of a slice!
-			me.WriteValue.Set(reflect.ValueOf(arg))
+			me.WriteValue.Set(rv)
 			return nil
 		}
 		//
@@ -518,7 +518,7 @@ func (me *Value) To(arg interface{}) error {
 			return nil
 		} else if rv.Kind() == reflect.Slice {
 			// When incoming value is a slice we use the last value and try again.
-			if n := rv.Len(); n == 0 {
+			if n := rv.Len(); n > 0 {
 				rv = rv.Index(n - 1)
 				continue
 			}
