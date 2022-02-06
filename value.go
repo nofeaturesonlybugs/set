@@ -401,8 +401,6 @@ func (me *Value) NewElem() (*Value, error) {
 //
 //	T is scalar, S is scalar, same type
 //		-> direct assignment
-//	T is pointer, S is pointer, same type and level of indirection // TODO+NB Remove this note -- package does not do this.
-//		-> direct assignment
 //
 //	If S is a pointer then dereference until final S value and continue...
 //

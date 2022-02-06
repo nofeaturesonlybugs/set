@@ -43,6 +43,11 @@
 
     + Add coerce subpackage.
 
+    + Fix erroneous documentation for Value.To that indicated if Dst and Src were both pointers
+        with the same level of indirection that direct assignment is performed.  The Value type
+        performs assignment by working with the values at the end of pointer chains and therefore
+        does not perform direct assignment of pointers.
+        
 0.4.0
     + set.Mapper
         + Add TaggedFieldsOnly field.
