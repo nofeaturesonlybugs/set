@@ -5,6 +5,8 @@ import (
 	"reflect"
 
 	"github.com/nofeaturesonlybugs/errors"
+
+	"github.com/nofeaturesonlybugs/set/coerce"
 )
 
 var (
@@ -399,7 +401,7 @@ func (me *Value) NewElem() (*Value, error) {
 //
 //	T is scalar, S is scalar, same type
 //		-> direct assignment
-//	T is pointer, S is pointer, same type and level of indirection
+//	T is pointer, S is pointer, same type and level of indirection // TODO+NB Remove this note -- package does not do this.
 //		-> direct assignment
 //
 //	If S is a pointer then dereference until final S value and continue...
@@ -416,109 +418,114 @@ func (me *Value) NewElem() (*Value, error) {
 //		-> Note: If the elements themselves are pointers then, for example, T[0] and S[0] point
 //			at the same memory and will see changes to whatever is pointed at.
 func (me *Value) To(arg interface{}) error {
-	// Performance note(s):
-	//	Early versions of this called me.Zero() and then simply returned on error or for incompatible types.
-	//	It turns out the call to Zero() can be relatively expensive in terms of ns/op and memory allocations.
-	//	We now explicitly call me.Zero only on those conditions where we are returning without actually
-	//	changing me.WriteValue.
-	//
 	if me == nil {
 		return errors.NilReceiver()
 	} else if me.original == nil || !me.CanWrite || me.Kind == reflect.Invalid {
 		return errors.Errorf(me.errorUnsupported("To"))
-	}
-	T := reflect.TypeOf(arg)
-	if arg == nil || T == nil {
+	} else if arg == nil {
 		return me.Zero()
-	} else if (T == me.Type || T.AssignableTo(me.Type)) && me.Kind != reflect.Slice {
-		// N.B: We checked that me.Kind is not a slice because this package always makes a copy of a slice!
-		//
-		// Performance note(s):
-		//	(T == me.Type || T.AssignableTo(me.Type)) will short-circuit the call to T.AssignableTo() for
-		//		basic types, further increasing performance (from 4.20% of Total down to 1.79%)
-		//
-		//	Early versions of this simply did:
-		//		me.WriteValue.Set(reflect.ValueOf(arg))
-		//		For basic built-in types this is relatively expensive, hence the type switch.
-		//		Pre-bench: 		210ms within To() (9.50% of Total), 140ms in original statement.
-		//		Post-bench:		50ms within To() (4.20% of Total), 10ms spread across calls to me.WriteValue.SetT()
-		switch tt := arg.(type) {
-		case bool:
-			me.WriteValue.SetBool(tt)
-		case int:
-			me.WriteValue.SetInt(int64(tt))
-		case int8:
-			me.WriteValue.SetInt(int64(tt))
-		case int16:
-			me.WriteValue.SetInt(int64(tt))
-		case int32:
-			me.WriteValue.SetInt(int64(tt))
-		case int64:
-			me.WriteValue.SetInt(tt)
-		case uint:
-			me.WriteValue.SetUint(uint64(tt))
-		case uint8:
-			me.WriteValue.SetUint(uint64(tt))
-		case uint16:
-			me.WriteValue.SetUint(uint64(tt))
-		case uint32:
-			me.WriteValue.SetUint(uint64(tt))
-		case uint64:
-			me.WriteValue.SetUint(tt)
-		case float32:
-			me.WriteValue.SetFloat(float64(tt))
-		case float64:
-			me.WriteValue.SetFloat(tt)
-		case string:
-			me.WriteValue.SetString(tt)
-		default:
-			me.WriteValue.Set(reflect.ValueOf(arg))
-		}
-		return nil
-	} else if me.IsScalar && T.Kind() == me.Kind && T.ConvertibleTo(me.Type) {
-		// This catches scenarios where the types differ but the underlying kinds do not; for example:
-		//		type NewString string
-		//		var dst NewString
-		//		src := "A regular string."
-		//		set.V(&dst).To(src)
-		me.WriteValue.Set(reflect.ValueOf(arg).Convert(me.Type))
-		return nil
 	}
 	//
-	// If arg/data represents any type of pointer we want to get to the final value:
-	dataValue := reflect.ValueOf(arg)
-	for ; dataValue.Kind() == reflect.Ptr; dataValue = reflect.Indirect(dataValue) {
-		if dataValue.IsNil() { // If arg is a pointer and eventually nil we're done because we're already zero value.
+	// This typeswitch handles the case where we are a scalar.
+	switch me.Kind {
+	case reflect.Bool:
+		c, err := coerce.Bool(arg)
+		me.WriteValue.SetBool(c)
+		return err
+	case reflect.Float32:
+		c, err := coerce.Float32(arg)
+		me.WriteValue.SetFloat(float64(c))
+		return err
+	case reflect.Float64:
+		c, err := coerce.Float64(arg)
+		me.WriteValue.SetFloat(c)
+		return err
+	case reflect.Int:
+		c, err := coerce.Int(arg)
+		me.WriteValue.SetInt(int64(c))
+		return err
+	case reflect.Int8:
+		c, err := coerce.Int8(arg)
+		me.WriteValue.SetInt(int64(c))
+		return err
+	case reflect.Int16:
+		c, err := coerce.Int16(arg)
+		me.WriteValue.SetInt(int64(c))
+		return err
+	case reflect.Int32:
+		c, err := coerce.Int32(arg)
+		me.WriteValue.SetInt(int64(c))
+		return err
+	case reflect.Int64:
+		c, err := coerce.Int64(arg)
+		me.WriteValue.SetInt(int64(c))
+		return err
+	case reflect.Uint:
+		c, err := coerce.Uint(arg)
+		me.WriteValue.SetUint(uint64(c))
+		return err
+	case reflect.Uint8:
+		c, err := coerce.Uint8(arg)
+		me.WriteValue.SetUint(uint64(c))
+		return err
+	case reflect.Uint16:
+		c, err := coerce.Uint16(arg)
+		me.WriteValue.SetUint(uint64(c))
+		return err
+	case reflect.Uint32:
+		c, err := coerce.Uint32(arg)
+		me.WriteValue.SetUint(uint64(c))
+		return err
+	case reflect.Uint64:
+		c, err := coerce.Uint64(arg)
+		me.WriteValue.SetUint(uint64(c))
+		return err
+	case reflect.String:
+		c, err := coerce.String(arg)
+		me.WriteValue.SetString(c)
+		return err
+	}
+	//
+	rv := reflect.ValueOf(arg)
+	for {
+		//
+		// If arg is any kind of pointer dereference to final value or nil
+		for ; rv.Kind() == reflect.Ptr; rv = rv.Elem() {
+			if rv.IsNil() {
+				return me.Zero()
+			}
+		}
+		T := rv.Type()
+		//
+		if (T == me.Type || T.AssignableTo(me.Type)) && me.Kind != reflect.Slice {
+			// NB  We checked that me.Kind is not a slice because this package always makes a copy of a slice!
+			me.WriteValue.Set(reflect.ValueOf(arg))
+			return nil
+		}
+		//
+		if me.IsSlice {
+			me.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
+			if rv.Kind() != reflect.Slice {
+				arg = []interface{}{arg}
+			}
+			slice := reflect.ValueOf(arg)
+			for k, size := 0, slice.Len(); k < size; k++ {
+				elem := V(reflect.New(me.ElemType).Interface())
+				if err := elem.To(slice.Index(k).Interface()); err != nil {
+					me.Zero()
+					return err
+				}
+				me.WriteValue.Set(reflect.Append(me.WriteValue, elem.WriteValue))
+			}
+			return nil
+		} else if rv.Kind() == reflect.Slice {
+			// When incoming value is a slice we use the last value and try again.
+			if n := rv.Len(); n == 0 {
+				rv = rv.Index(n - 1)
+				continue
+			}
 			return me.Zero()
 		}
+		return me.Zero()
 	}
-	dataTypeInfo := TypeCache.StatType(dataValue.Type())
-	//
-	if me.IsSlice {
-		me.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
-		if !dataTypeInfo.IsSlice {
-			arg = []interface{}{arg}
-		}
-		slice := reflect.ValueOf(arg)
-		for k, size := 0, slice.Len(); k < size; k++ {
-			elem := V(reflect.New(me.ElemType).Interface())
-			if err := elem.To(slice.Index(k).Interface()); err != nil {
-				me.Zero()
-				return err
-			}
-			me.WriteValue.Set(reflect.Append(me.WriteValue, elem.WriteValue))
-		}
-		return nil
-	} else if dataTypeInfo.Kind == reflect.Slice {
-		// If the incoming type is slice but ours is not then we call set again using the last element in the slice.
-		if dataValue.Len() > 0 {
-			return me.To(dataValue.Index(dataValue.Len() - 1).Interface())
-		}
-	} else if me.IsScalar {
-		if err := coerce(me.WriteValue, dataValue); err != nil {
-			return errors.Go(err)
-		}
-		return nil
-	}
-	return me.Zero()
 }
