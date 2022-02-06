@@ -645,33 +645,146 @@ func TestValue_setSliceCreatesCopies(t *testing.T) {
 	}
 }
 
-func TestValue_setDifferentTypesButSameKind(t *testing.T) {
-	chk := assert.New(t)
-	//
-	// When a new type is created but its underlying kind is a built-in type.
-	{
-		type AltString string
-		src := "Hello, World"
-		var dst AltString
-		err := set.V(&dst).To(src)
-		chk.NoError(err)
-		chk.Equal(AltString("Hello, World"), dst)
+func TestValue_setStruct(t *testing.T) {
+	type S struct {
+		Num int
+		Str string
 	}
-	{
-		type AltInt int
-		src := 42
-		var dst AltInt
-		err := set.V(&dst).To(src)
-		chk.NoError(err)
-		chk.Equal(AltInt(42), dst)
+	type Wrong struct {
+		Num int
+		Str string
 	}
-	{
-		type AltUint uint
-		src := 42
-		var dst AltUint
-		err := set.V(&dst).To(src)
-		chk.NoError(err)
-		chk.Equal(AltUint(42), dst)
+	type StructTest struct {
+		Name     string
+		Dest     interface{}
+		To       interface{}
+		Error    error
+		AssertFn func(interface{}, *testing.T)
+	}
+	tests := []StructTest{
+		{
+			Name: "nil",
+			Dest: &S{Num: 42, Str: "Hello!"},
+			To:   nil,
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(0, d.Num)
+				chk.Equal("", d.Str)
+			},
+		},
+		{
+			Name: "struct",
+			Dest: &S{},
+			To:   S{Num: 42, Str: "Hello!"},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(42, d.Num)
+				chk.Equal("Hello!", d.Str)
+			},
+		},
+		{
+			Name: "wrong struct",
+			Dest: &S{Num: 10, Str: "Wrong incoming!"},
+			To:   Wrong{Num: 42, Str: "Hello!"},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(0, d.Num)
+				chk.Equal("", d.Str)
+			},
+		},
+		{
+			Name: "nil ptr",
+			Dest: &S{Num: 42, Str: "Hello!"},
+			To:   (*S)(nil),
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(0, d.Num)
+				chk.Equal("", d.Str)
+			},
+		},
+		{
+			Name: "slice",
+			Dest: &S{},
+			To: []S{
+				{Num: 1, Str: "First"},
+				{Num: 2, Str: "Second"},
+				{Num: 3, Str: "Third"},
+			},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(3, d.Num)
+				chk.Equal("Third", d.Str)
+			},
+		},
+		{
+			Name: "nil slice",
+			Dest: &S{Num: 1, Str: "First"},
+			To:   []S(nil),
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(0, d.Num)
+				chk.Equal("", d.Str)
+			},
+		},
+		{
+			Name: "slice of ptr",
+			Dest: &S{},
+			To: []*S{
+				{Num: 1, Str: "First"},
+				{Num: 2, Str: "Second"},
+				{Num: 3, Str: "Third"},
+			},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(3, d.Num)
+				chk.Equal("Third", d.Str)
+			},
+		},
+		{
+			Name: "slice of ptr nil element",
+			Dest: &S{Num: 2, Str: "Second"},
+			To: []*S{
+				{Num: 1, Str: "First"},
+				{Num: 2, Str: "Second"},
+				nil,
+			},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(0, d.Num)
+				chk.Equal("", d.Str)
+			},
+		},
+		{
+			Name: "ptr to slice",
+			Dest: &S{},
+			To: &[]S{
+				{Num: 1, Str: "First"},
+				{Num: 2, Str: "Second"},
+				{Num: 3, Str: "Third"},
+			},
+			AssertFn: func(dst interface{}, t *testing.T) {
+				chk := assert.New(t)
+				d := dst.(*S)
+				chk.Equal(3, d.Num)
+				chk.Equal("Third", d.Str)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			err := set.V(test.Dest).To(test.To)
+			chk.ErrorIs(err, test.Error)
+			test.AssertFn(test.Dest, t)
+		})
 	}
 }
 
