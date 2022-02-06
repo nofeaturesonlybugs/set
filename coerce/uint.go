@@ -97,20 +97,31 @@ func Uint(v interface{}) (uint, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
+			v = reflect.ValueOf(v).Int()
 			continue
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
+			v = reflect.ValueOf(v).Uint()
 			continue
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			if FloatOverflowsUint(float64(f), strconv.IntSize) {
+				return 0, fmt.Errorf("%w; %v overflows uint", ErrOverflow, f)
+			}
+			return uint(f), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			if FloatOverflowsUint(f, strconv.IntSize) {
+				return 0, fmt.Errorf("%w; %v overflows uint", ErrOverflow, f)
+			}
+			return uint(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
@@ -222,20 +233,31 @@ func Uint8(v interface{}) (uint8, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
+			v = reflect.ValueOf(v).Int()
 			continue
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
+			v = reflect.ValueOf(v).Uint()
 			continue
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			if FloatOverflowsUint(float64(f), 8) {
+				return 0, fmt.Errorf("%w; %v overflows uint8", ErrOverflow, f)
+			}
+			return uint8(f), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			if FloatOverflowsUint(f, 8) {
+				return 0, fmt.Errorf("%w; %v overflows uint8", ErrOverflow, f)
+			}
+			return uint8(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
@@ -344,20 +366,31 @@ func Uint16(v interface{}) (uint16, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
+			v = reflect.ValueOf(v).Int()
 			continue
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
+			v = reflect.ValueOf(v).Uint()
 			continue
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			if FloatOverflowsUint(float64(f), 16) {
+				return 0, fmt.Errorf("%w; %v overflows uint16", ErrOverflow, f)
+			}
+			return uint16(f), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			if FloatOverflowsUint(f, 16) {
+				return 0, fmt.Errorf("%w; %v overflows uint16", ErrOverflow, f)
+			}
+			return uint16(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
@@ -463,20 +496,31 @@ func Uint32(v interface{}) (uint32, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
+			v = reflect.ValueOf(v).Int()
 			continue
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
+			v = reflect.ValueOf(v).Uint()
 			continue
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			if FloatOverflowsUint(float64(f), 32) {
+				return 0, fmt.Errorf("%w; %v overflows uint32", ErrOverflow, f)
+			}
+			return uint32(f), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			if FloatOverflowsUint(f, 32) {
+				return 0, fmt.Errorf("%w; %v overflows uint32", ErrOverflow, f)
+			}
+			return uint32(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
@@ -576,20 +620,31 @@ func Uint64(v interface{}) (uint64, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
+			v = reflect.ValueOf(v).Int()
 			continue
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
+			v = reflect.ValueOf(v).Uint()
 			continue
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			if FloatOverflowsUint(float64(f), 64) {
+				return 0, fmt.Errorf("%w; %v overflows uint64", ErrOverflow, f)
+			}
+			return uint64(f), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			if FloatOverflowsUint(f, 64) {
+				return 0, fmt.Errorf("%w; %v overflows uint64", ErrOverflow, f)
+			}
+			return uint64(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)

@@ -68,22 +68,25 @@ func Float32(v interface{}) (float32, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
-			continue
+			return float32(reflect.ValueOf(v).Int()), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
-			continue
+			return float32(reflect.ValueOf(v).Uint()), nil
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
 		case reflect.Float32:
-			return reflect.ValueOf(v).Convert(TypeFloat32).Interface().(float32), nil
+			return KindFloat32(v), nil
 		case reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+			f := reflect.ValueOf(v).Float()
+			if f > math.MaxFloat32 || f < math.SmallestNonzeroFloat32 {
+				return 0, fmt.Errorf("%w; %v overflows float32", ErrOverflow, f)
+			}
+			return float32(f), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
@@ -164,21 +167,21 @@ func Float64(v interface{}) (float64, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			if reflect.ValueOf(v).Bool() {
+				return 1, nil
+			}
+			return 0, nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
-			continue
+			return float64(reflect.ValueOf(v).Int()), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
-			continue
+			return float64(reflect.ValueOf(v).Uint()), nil
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
 		case reflect.Float32:
-			return reflect.ValueOf(v).Convert(TypeFloat64).Interface().(float64), nil
+			return float64(KindFloat32(v)), nil
 		case reflect.Float64:
-			return reflect.ValueOf(v).Convert(TypeFloat64).Interface().(float64), nil
+			return KindFloat64(v), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)

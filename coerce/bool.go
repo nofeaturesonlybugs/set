@@ -57,19 +57,18 @@ func Bool(v interface{}) (bool, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			return reflect.ValueOf(v).Convert(TypeBool).Interface().(bool), nil
+			return reflect.ValueOf(v).Bool(), nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
-			continue
+			return reflect.ValueOf(v).Int() != 0, nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
-			continue
+			return reflect.ValueOf(v).Uint() != 0, nil
 		case reflect.String:
 			v = reflect.ValueOf(v).Convert(TypeString).Interface()
 			continue
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			return KindFloat32(v) != 0, nil
+		case reflect.Float64:
+			return KindFloat64(v) != 0, nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)

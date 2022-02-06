@@ -53,19 +53,19 @@ func String(v interface{}) (string, error) {
 		//		pick last element and try again
 		switch T.Kind() {
 		case reflect.Bool:
-			v = reflect.ValueOf(v).Convert(TypeBool).Interface()
-			continue
+			return strconv.FormatBool(reflect.ValueOf(v).Bool()), nil
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v = reflect.ValueOf(v).Convert(TypeInt64).Interface()
-			continue
+			return strconv.FormatInt(reflect.ValueOf(v).Int(), 10), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v = reflect.ValueOf(v).Convert(TypeUint64).Interface()
-			continue
+			return strconv.FormatUint(reflect.ValueOf(v).Uint(), 10), nil
 		case reflect.String:
 			return reflect.ValueOf(v).Convert(TypeString).Interface().(string), nil
-		case reflect.Float32, reflect.Float64:
-			v = reflect.ValueOf(v).Convert(TypeFloat64).Interface()
-			continue
+		case reflect.Float32:
+			f := KindFloat32(v)
+			return strconv.FormatFloat(float64(f), 'g', -1, 32), nil
+		case reflect.Float64:
+			f := KindFloat64(v)
+			return strconv.FormatFloat(f, 'g', -1, 64), nil
 
 		case reflect.Ptr:
 			rv := reflect.ValueOf(v)
