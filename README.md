@@ -9,6 +9,7 @@ Package `set` is a small wrapper around the official reflect package that facili
 Read the `godoc` for more detailed explanations and examples but here are some enticing snippets.
 
 ## Scalars and Type-Coercion
+
 ```go
 {
     // type coercion
@@ -23,11 +24,12 @@ Read the `godoc` for more detailed explanations and examples but here are some e
     b := uint(42)
     set.V(&a).To(b)             // This coerces b into a if possible.
     set.V(&a).To("-57")         // Also works.
-    set.V(&a).To("Hello")       // Returns an error.    
+    set.V(&a).To("Hello")       // Returns an error.
 }
 ```
 
 ## Pointer Allocation Plus Type-Coercion
+
 ```go
 {
     // pointer allocation and type coercion
@@ -38,6 +40,7 @@ Read the `godoc` for more detailed explanations and examples but here are some e
 ```
 
 ## Scalars-to-Slices and Slices-to-Scalars
+
 ```go
 {
     // assign scalars to slices
@@ -52,6 +55,7 @@ Read the `godoc` for more detailed explanations and examples but here are some e
 ```
 
 ## Slices to Slices Including Type-Coercion
+
 ```go
 {
     // slices to slices with or without type coercion; new slice is always created!
@@ -70,6 +74,7 @@ Read the `godoc` for more detailed explanations and examples but here are some e
 ```
 
 ## Filling Structs by Field Name
+
 ```go
 m := map[string]interface{}{
     "Name": "Bob",
@@ -85,22 +90,23 @@ m := map[string]interface{}{
 myGetter := set.MapGetter(m)
 
 type Address struct {
-    Street1 string 
-    Street2 string 
-    City    string 
-    State   string 
-    Zip     string 
+    Street1 string
+    Street2 string
+    City    string
+    State   string
+    Zip     string
 }
 type Person struct {
-    Name    string  
-    Age     uint    
-    Address Address 
+    Name    string
+    Age     uint
+    Address Address
 }
 var t Person
 set.V(&t).Fill(myGetter)
 ```
 
 ## Filling Structs by Struct Tag
+
 ```go
 m := map[string]interface{}{
     "name": "Bob",
@@ -132,6 +138,7 @@ set.V(&t).FillByTag("key", myGetter)
 ```
 
 ## Allocating Struct Pointers and Pointer Fields
+
 ```go
 type Address struct {
     Street1 string `key:"street1"`
@@ -165,6 +172,7 @@ fmt.Println(t.Address.Street1)      // 97531 Some Street
 ```
 
 ## Field Pointers Always Allocated
+
 ```go
 type Address struct {
     Street1 string `key:"street1"`
@@ -192,6 +200,7 @@ fmt.Printf("%p\n", t.Address) // Prints a memory address; the field was allocate
 ## Pointer-to-Slices-of-Struct-Pointers -- OH MY!
 
 Also noteworthy in this example is the same fuzzy logic for assigning `scalar-to-slice` or `slice-to-scalar` also works for `struct-to-[]struct` and `[]struct-to-struct`.
+
 ```go
 func TestValue_fillNestedStructPointerToSlicesAsPointers(t *testing.T) {
     chk := assert.New(t)
@@ -306,9 +315,11 @@ func TestValue_fillNestedStructPointerToSlicesAsPointers(t *testing.T) {
     chk.Equal("99999", (*t.Slice)[0].Address.Zip)
 }
 ```
+
 ## Value.FieldByIndex() and Value.FieldByIndexAsValue()
 
-Similarly to the standard `reflect` package `Value` also supports accessing `struct` types by field indeces.  Unlike the standard `reflect` package this package will instantiate and create `nil` members as it traverses the `struct`.
+Similarly to the standard `reflect` package `Value` also supports accessing `struct` types by field indeces. Unlike the standard `reflect` package this package will instantiate and create `nil` members as it traverses the `struct`.
+
 ```go
 type A struct {
 	B struct {
@@ -332,7 +343,9 @@ asValue := set.V(&a).FieldByIndexAsValue([]int{0, 0, 0})
 ```
 
 ## Mapper and Mapping for Nested Struct Access
-`Mapper` traverses a nested struct hierarchy to generate a `Mapping`.  From a `Mapping` you can use `string` keys to access the struct members by `struct field index`.
+
+`Mapper` traverses a nested struct hierarchy to generate a `Mapping`. From a `Mapping` you can use `string` keys to access the struct members by `struct field index`.
+
 ```go
 type CommonDb struct {
     Pk          int    `t:"pk"`
@@ -346,7 +359,9 @@ type Person struct {
 }
 var data Person
 ```
+
 Depending on the public `Mapper` members (aka options) the following mappings can be created:
+
 ```go
 // Type CommonDb doesn't affect names; join nestings with "_"
 mapper := &set.Mapper{
@@ -392,7 +407,8 @@ generates = `
 
 ## BoundMappings combine Mapper.Map() and Value.FieldByIndex()
 
-`Mapper.Bind()` will return a `BoundMapping` that you can use to set nested struct members on a variable via strings.  You can `Rebind()` a `BoundMapping` to switch the underlying value.  Consider the following struct hierarchy:
+`Mapper.Bind()` will return a `BoundMapping` that you can use to set nested struct members on a variable via strings. You can `Rebind()` a `BoundMapping` to switch the underlying value. Consider the following struct hierarchy:
+
 ```go
 type Common struct {
     Id int
@@ -426,7 +442,9 @@ type T struct {
     Vendor   Vendor
 }
 ```
+
 Create a `set.Mapper` with your desired options and create a binding:
+
 ```go
 mapper := &set.Mapper{
     Elevated: set.NewTypeList(Common{}, Timestamps{}),
@@ -435,9 +453,11 @@ mapper := &set.Mapper{
 //
 dest := new(T)
 // bound will become our BoundMapping and the accessor into instances of T
-bound := mapper.Bind(&dest) 
+bound := mapper.Bind(&dest)
 ```
+
 Now you can iterate a dataset and populate instances of `T`:
+
 ```go
 for k := 0; k < b.N; k++ {
     // `rows` is a big pile of randomized data.  We are assigning data from `row` into our new T
@@ -472,12 +492,18 @@ for k := 0; k < b.N; k++ {
 }
 ```
 
-## API Consistency and Breaking Changes  
-I am making a very concerted effort to break the API as little as possible while adding features or fixing bugs.  However this software is currently in a pre-1.0.0 version and breaking changes *are* allowed under standard semver.  As the API approaches a stable 1.0.0 release I will list any such breaking changes here and they will always be signaled by a bump in *minor* version.
+## API Consistency and Breaking Changes
 
-* 0.4.0 ⭢ TODO  
-  TODO Numerous breaking changes.
-* 0.3.0 ⭢ 0.4.0  
-  set.Mapper has new field TaggedFieldsOnly.  `TaggedFieldsOnly=false` means no change in behavior.  `TaggedFieldsOnly=true` means set.Mapper only maps exported fields with struct tags.
-* 0.2.3 ⭢ 0.3.0  
+I am making a very concerted effort to break the API as little as possible while adding features or fixing bugs. However this software is currently in a pre-1.0.0 version and breaking changes _are_ allowed under standard semver. As the API approaches a stable 1.0.0 release I will list any such breaking changes here and they will always be signaled by a bump in _minor_ version.
+
+- 0.4.0 ⭢ TODO
+
+  - TODO Numerous breaking changes.
+  - Remove erroneous documentation for Value.To method.  
+    The documentation indicated that when Dst and Src are both pointers with same level of indirection that direct assignment was performed. This is not true. The Value type uses the values at the end of pointers and pointer chains and therefore does not perform direct assignment of pointer values.
+
+- 0.3.0 ⭢ 0.4.0  
+  set.Mapper has new field TaggedFieldsOnly. `TaggedFieldsOnly=false` means no change in behavior. `TaggedFieldsOnly=true` means set.Mapper only maps exported fields with struct tags.
+
+- 0.2.3 ⭢ 0.3.0  
   set.BoundMapping.Assignables has a second argument allowing you to pre-allocate the slice that is returned; you can also set it to `nil` to keep current behavior.

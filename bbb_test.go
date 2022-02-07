@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/nofeaturesonlybugs/set"
@@ -52,8 +53,13 @@ func BenchmarkScalarTo(b *testing.B) {
 			v.To(U32(30))
 			v.To(U64(40))
 			v.To(U(50))
-			v.To("42")
-			v.To(S("55"))
+			if v.Kind == reflect.Bool {
+				v.To("1")
+				v.To(S("0"))
+			} else {
+				v.To("42")
+				v.To(S("55"))
+			}
 		}
 	}
 
