@@ -1642,6 +1642,18 @@ func TestValue_fieldByIndex(t *testing.T) {
 	}
 }
 
+func TestValue_fieldByIndex_outOfRange(t *testing.T) {
+	chk := assert.New(t)
+	type S struct {
+		A int
+	}
+	var s S
+	_, err := set.V(&s).FieldByIndex([]int{0})
+	chk.NoError(err)
+	_, err = set.V(&s).FieldByIndex([]int{1})
+	chk.ErrorIs(err, set.ErrIndexOutOfBounds)
+}
+
 func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	chk := assert.New(t)
 	var err error

@@ -183,8 +183,8 @@ func (me *Value) FieldByIndex(index []int) (reflect.Value, error) {
 		n := index[k] // n is the index (or field num) to consider
 		if v.Kind() != reflect.Struct {
 			return v, errors.Errorf("FieldByIndex requires type to be a struct; type is %v", v.Type())
-		} else if n > v.NumField() {
-			return v, errors.Errorf("Index out of bounds; field is len %v and index is %v", v.NumField(), n)
+		} else if n > v.NumField()-1 {
+			return v, fmt.Errorf("%w: field is len %v and index is %v", ErrIndexOutOfBounds, v.NumField(), n)
 		}
 		v = v.Field(n)
 		t, k := v.Type(), v.Kind()
