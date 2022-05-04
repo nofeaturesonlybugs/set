@@ -1,6 +1,7 @@
 package set
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -54,23 +55,6 @@ type PreparedMapping struct {
 	paths map[string]path.ReflectPath
 }
 
-// pkgerr wraps any internal error inside of pkgerr type with contextual information.
-func (p PreparedMapping) pkgerr(method string) pkgerr {
-	err := pkgerr{
-		Err:      p.err,
-		CallSite: "PreparedMapping." + method,
-	}
-	switch p.err {
-	case ErrReadOnly:
-		err.Hint = "call to Mapper.Prepare(" + p.top.String() + ") should have been Mapper.Prepare(*" + p.top.String() + ")"
-	case ErrNoPlan:
-		err.Hint = "call PreparedMapping.Plan to prepare access plan for " + p.top.String()
-	default:
-		err.Context = "value of " + p.top.String()
-	}
-	return err
-}
-
 // Assignables returns a slice of pointers to the fields in the currently bound
 // struct in the order specified by the last call to Plan.
 //
@@ -84,7 +68,7 @@ func (p PreparedMapping) pkgerr(method string) pkgerr {
 // query results.
 func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
-		return rv, p.pkgerr("Assignables")
+		return rv, p.err.(pkgerr).WithCallSite("PreparedMapping.Assignables")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
@@ -145,11 +129,11 @@ func (p PreparedMapping) Err() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Field() (*Value, error) {
 	if !p.valid {
-		return nil, p.pkgerr("Field")
+		return nil, p.err.(pkgerr).WithCallSite("PreparedMapping.Field")
 	}
 	//
 	if err := p.next(); err != nil {
-		return nil, pkgerr{Err: err, CallSite: "PreparedMapping.Field", Context: "value of " + p.top.String()}
+		return nil, err.(pkgerr).WithCallSite("PreparedMapping.Field")
 	}
 	//
 	step := p.plan[p.k]
@@ -186,7 +170,7 @@ func (p *PreparedMapping) Field() (*Value, error) {
 // database queries.
 func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
-		return rv, p.pkgerr("Fields")
+		return rv, p.err.(pkgerr).WithCallSite("PreparedMapping.Fields")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
@@ -258,8 +242,8 @@ func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 // If an unknown field is specified then ErrUnknownField is wrapped with the field name
 // and the internal error is set to ErrPlanInvalid.
 func (p *PreparedMapping) Plan(fields ...string) error {
-	if p.err == ErrReadOnly {
-		return p.pkgerr("Plan")
+	if p.err != nil && errors.Is(p.err, ErrReadOnly) {
+		return p.err.(pkgerr).WithCallSite("PreparedMapping.Plan")
 	}
 	//
 	// Ensure p.plan has enough space and then reslice to empty.
@@ -272,10 +256,15 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 	for _, field := range fields {
 		path, ok := p.paths[field]
 		if !ok {
-			p.err = ErrNoPlan
+			context := "field [" + field + "] not found in type " + p.top.String()
+			p.err = pkgerr{
+				Err:      ErrNoPlan,
+				CallSite: "PreparedMapping.Plan",
+				Context:  context + " during plan creation",
+			}
 			return pkgerr{
 				Err:      ErrUnknownField,
-				Context:  "field [" + field + "] not found in type " + p.top.String(),
+				Context:  context,
 				CallSite: "PreparedMapping.Plan",
 			}
 		}
@@ -297,7 +286,7 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 // As a convenience Rebind allows v to be an instance of reflect.Value.  This prevents
 // unnecessary calls to reflect.Value.Interface().
 func (p *PreparedMapping) Rebind(v interface{}) {
-	if p.err == ErrReadOnly {
+	if p.err != nil && errors.Is(p.err, ErrReadOnly) {
 		return
 	}
 	//
@@ -314,7 +303,10 @@ func (p *PreparedMapping) Rebind(v interface{}) {
 		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", p.value.Interface(), v)) // TODO ErrRebind maybe?
 	}
 	//
-	p.err = nil
+	if p.valid {
+		// Only clear previous error if we are valid.
+		p.err = nil
+	}
 	p.value, _ = Writable(rv)
 	//
 	p.k = -1
@@ -326,10 +318,11 @@ func (p *PreparedMapping) next() error {
 	p.k++
 	if p.k == len(p.plan) {
 		p.k--
+		err := pkgerr{Err: ErrPlanOutOfBounds, Context: "value of " + p.top.String()}
 		if p.err == nil {
-			p.err = ErrPlanOutOfBounds
+			p.err = err
 		}
-		return ErrPlanOutOfBounds
+		return err
 	}
 	return nil
 }
@@ -344,13 +337,13 @@ func (p *PreparedMapping) next() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Set(value interface{}) error {
 	if !p.valid {
-		return p.pkgerr("Set")
+		return p.err.(pkgerr).WithCallSite("PreparedMapping.Set")
 	}
 	//
 	var err error
 	//
 	if err = p.next(); err != nil {
-		return pkgerr{Err: err, CallSite: "PreparedMapping.Set", Context: "value of " + p.top.String()}
+		return err.(pkgerr).WithCallSite("PreparedMapping.Set")
 	}
 	//
 	v := p.value
@@ -424,7 +417,10 @@ func (p *PreparedMapping) Set(value interface{}) error {
 	// fieldValue to a *Value and use our swiss-army knife Value.To().
 	err = V(v).To(value)
 	if err != nil && p.err == nil {
-		p.err = err // TODO Possibly wrap with more information.
+		p.err = pkgerr{
+			Err:      err,
+			CallSite: "PreparedMapping.Set",
+		}
 	}
 	return err
 }

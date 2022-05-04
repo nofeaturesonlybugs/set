@@ -75,55 +75,71 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 		if test.MapperError != nil {
 			t.Run("Bind "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
+				var b set.BoundMapping
+				var err error
 				//
-				b, err := m.Bind(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				ptrs, err := b.Assignables(fieldNames, nil)
-				chk.ErrorIs(err, set.ErrReadOnly, describe)
-				chk.Nil(ptrs, describe)
-				//
-				for _, field := range fieldNames {
-					v, err := b.Field(field)
+				for k := 0; k < 2; k++ {
+					if k == 0 {
+						b, err = m.Bind(NewV(test.V))
+						chk.ErrorIs(err, test.MapperError, describe)
+					} else {
+						b.Rebind(NewV(test.V))
+					}
+					//
+					ptrs, err := b.Assignables(fieldNames, nil)
 					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(v, describe)
-				}
-				//
-				values, err := b.Fields(fieldNames, nil)
-				chk.ErrorIs(err, set.ErrReadOnly, describe)
-				chk.Nil(values, describe)
-				//
-				for _, field := range test.Fields {
-					err := b.Set(field.Field, field.To)
+					chk.Nil(ptrs, describe)
+					//
+					for _, field := range fieldNames {
+						v, err := b.Field(field)
+						chk.ErrorIs(err, set.ErrReadOnly, describe)
+						chk.Nil(v, describe)
+					}
+					//
+					values, err := b.Fields(fieldNames, nil)
 					chk.ErrorIs(err, set.ErrReadOnly, describe)
+					chk.Nil(values, describe)
+					//
+					for _, field := range test.Fields {
+						err := b.Set(field.Field, field.To)
+						chk.ErrorIs(err, set.ErrReadOnly, describe)
+					}
 				}
 			})
 			t.Run("Prepare "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
+				var p set.PreparedMapping
+				var err error
 				//
-				p, err := m.Prepare(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				err = p.Plan(fieldNames...)
-				chk.ErrorIs(err, set.ErrReadOnly, describe)
-				//
-				ptrs, err := p.Assignables(nil)
-				chk.ErrorIs(err, set.ErrReadOnly, describe)
-				chk.Nil(ptrs, describe)
-				//
-				for range fieldNames {
-					v, err := p.Field()
+				for k := 0; k < 2; k++ {
+					if k == 0 {
+						p, err = m.Prepare(NewV(test.V))
+						chk.ErrorIs(err, test.MapperError, describe)
+						//
+						err = p.Plan(fieldNames...)
+						chk.ErrorIs(err, set.ErrReadOnly, describe)
+					} else {
+						p.Rebind(NewV(test.V))
+					}
+					//
+					ptrs, err := p.Assignables(nil)
 					chk.ErrorIs(err, set.ErrReadOnly, describe)
-					chk.Nil(v, describe)
-				}
-				//
-				values, err := p.Fields(nil)
-				chk.ErrorIs(err, set.ErrReadOnly, describe)
-				chk.Nil(values, describe)
-				//
-				for _, field := range test.Fields {
-					err = p.Set(field.To)
+					chk.Nil(ptrs, describe)
+					//
+					for range fieldNames {
+						v, err := p.Field()
+						chk.ErrorIs(err, set.ErrReadOnly, describe)
+						chk.Nil(v, describe)
+					}
+					//
+					values, err := p.Fields(nil)
 					chk.ErrorIs(err, set.ErrReadOnly, describe)
+					chk.Nil(values, describe)
+					//
+					for _, field := range test.Fields {
+						err = p.Set(field.To)
+						chk.ErrorIs(err, set.ErrReadOnly, describe)
+					}
 				}
 			})
 			continue
@@ -131,12 +147,135 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 			// When an unknown field is present we expect specific behaviors.
 			t.Run("Bind "+test.Name, func(t *testing.T) {
 				chk := assert.New(t)
+				var b set.BoundMapping
+				var err error
 				//
-				b, err := m.Bind(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
+				for k := 0; k < 2; k++ {
+					if k == 0 {
+						b, err = m.Bind(NewV(test.V))
+						chk.ErrorIs(err, test.MapperError, describe)
+					} else {
+						b.Rebind(NewV(test.V))
+					}
+					//
+					_, err = b.Assignables(fieldNames, nil)
+					chk.ErrorIs(err, set.ErrUnknownField, describe)
+					//
+					for _, field := range test.Fields {
+						v, err := b.Field(field.Field)
+						chk.ErrorIs(err, field.Error, describe)
+						if err != nil {
+							continue
+						}
+						err = v.To(field.To)
+						chk.NoError(err, describe)
+						chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+					}
+					//
+					_, err = b.Fields(fieldNames, nil)
+					chk.ErrorIs(err, set.ErrUnknownField, describe)
+					//
+					for _, field := range test.Fields {
+						err = b.Set(field.Field, field.To)
+						chk.ErrorIs(err, field.Error, describe)
+						if err != nil {
+							continue
+						}
+						v, _ := b.Field(field.Field)
+						chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+					}
+				}
+			})
+			t.Run("Prepare "+test.Name, func(t *testing.T) {
+				chk := assert.New(t)
+				var p set.PreparedMapping
+				var err error
 				//
-				_, err = b.Assignables(fieldNames, nil)
-				chk.ErrorIs(err, set.ErrUnknownField, describe)
+				for k := 0; k < 2; k++ {
+					if k == 0 {
+						p, err = m.Prepare(NewV(test.V))
+						chk.ErrorIs(err, test.MapperError, describe)
+						//
+						err = p.Plan(fieldNames...)
+						chk.ErrorIs(err, set.ErrUnknownField, describe)
+					} else {
+						p.Rebind(NewV(test.V))
+					}
+					//
+					ptrs, err := p.Assignables(nil)
+					chk.ErrorIs(err, set.ErrNoPlan, describe)
+					chk.Nil(ptrs, describe)
+					//
+					for range fieldNames {
+						v, err := p.Field()
+						chk.ErrorIs(err, set.ErrNoPlan, describe)
+						chk.Nil(v, describe)
+					}
+					//
+					values, err := p.Fields(nil)
+					chk.ErrorIs(err, set.ErrNoPlan, describe)
+					chk.Nil(values, describe)
+					//
+					for _, field := range test.Fields {
+						err = p.Set(field.To)
+						chk.ErrorIs(err, set.ErrNoPlan, describe)
+					}
+				}
+
+			})
+			continue
+		}
+		t.Run("Bind Assignables "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var b set.BoundMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					b, err = m.Bind(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+				} else {
+					b.Rebind(NewV(test.V))
+				}
+				//
+				ptrs, err := b.Assignables(fieldNames, nil)
+				chk.NoError(err, describe)
+				chk.Equal(len(fieldNames), len(ptrs), describe)
+			}
+		})
+		t.Run("Prepare Assignables "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var p set.PreparedMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					p, err = m.Prepare(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+					//
+					err = p.Plan(fieldNames...)
+					chk.NoError(err, describe)
+				} else {
+					p.Rebind(NewV(test.V))
+				}
+				//
+				ptrs, err := p.Assignables(nil)
+				chk.NoError(err, describe)
+				chk.Equal(len(fieldNames), len(ptrs), describe)
+			}
+		})
+		t.Run("Bind Field "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var b set.BoundMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					b, err = m.Bind(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+				} else {
+					b.Rebind(NewV(test.V))
+				}
 				//
 				for _, field := range test.Fields {
 					v, err := b.Field(field.Field)
@@ -148,9 +287,87 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 					chk.NoError(err, describe)
 					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
 				}
+			}
+		})
+		t.Run("Prepare Field "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var p set.PreparedMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					p, err = m.Prepare(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+					//
+					err = p.Plan(fieldNames...)
+					chk.NoError(err, describe)
+				} else {
+					p.Rebind(NewV(test.V))
+				}
 				//
-				_, err = b.Fields(fieldNames, nil)
-				chk.ErrorIs(err, set.ErrUnknownField, describe)
+				for _, field := range test.Fields {
+					v, err := p.Field()
+					chk.ErrorIs(err, field.Error, describe)
+					if err != nil {
+						continue
+					}
+					err = v.To(field.To)
+					chk.NoError(err, describe)
+					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
+				}
+			}
+		})
+		t.Run("Bind Fields "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var b set.BoundMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					b, err = m.Bind(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+				} else {
+					b.Rebind(NewV(test.V))
+				}
+				//
+				values, err := b.Fields(fieldNames, nil)
+				chk.NoError(err, describe)
+				chk.Equal(len(fieldNames), len(values), describe)
+			}
+		})
+		t.Run("Prepare Fields "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var p set.PreparedMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					p, err = m.Prepare(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+					//
+					err = p.Plan(fieldNames...)
+					chk.NoError(err, describe)
+				} else {
+					p.Rebind(NewV(test.V))
+				}
+				//
+				values, err := p.Fields(nil)
+				chk.NoError(err, describe)
+				chk.Equal(len(fieldNames), len(values), describe)
+			}
+		})
+		t.Run("Bind Set "+test.Name, func(t *testing.T) {
+			chk := assert.New(t)
+			var b set.BoundMapping
+			var err error
+			//
+			for k := 0; k < 2; k++ {
+				if k == 0 {
+					b, err = m.Bind(NewV(test.V))
+					chk.ErrorIs(err, test.MapperError, describe)
+				} else {
+					b.Rebind(NewV(test.V))
+				}
 				//
 				for _, field := range test.Fields {
 					err = b.Set(field.Field, field.To)
@@ -158,155 +375,43 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 					if err != nil {
 						continue
 					}
-					v, _ := b.Field(field.Field)
+					v, err := b.Field(field.Field)
+					chk.NoError(err)
 					chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
 				}
-			})
-			t.Run("Prepare "+test.Name, func(t *testing.T) {
-				chk := assert.New(t)
-				//
-				p, err := m.Prepare(NewV(test.V))
-				chk.ErrorIs(err, test.MapperError, describe)
-				//
-				err = p.Plan(fieldNames...)
-				chk.ErrorIs(err, set.ErrUnknownField, describe)
-				//
-				ptrs, err := p.Assignables(nil)
-				chk.ErrorIs(err, set.ErrNoPlan, describe)
-				chk.Nil(ptrs, describe)
-				//
-				for range fieldNames {
-					v, err := p.Field()
-					chk.ErrorIs(err, set.ErrNoPlan, describe)
-					chk.Nil(v, describe)
-				}
-				//
-				values, err := p.Fields(nil)
-				chk.ErrorIs(err, set.ErrNoPlan, describe)
-				chk.Nil(values, describe)
-				//
-				for _, field := range test.Fields {
-					err = p.Set(field.To)
-					chk.ErrorIs(err, set.ErrNoPlan, describe)
-				}
-			})
-			continue
-		}
-		t.Run("Bind Assignables "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			b, err := m.Bind(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			ptrs, err := b.Assignables(fieldNames, nil)
-			chk.NoError(err, describe)
-			chk.Equal(len(fieldNames), len(ptrs), describe)
-		})
-		t.Run("Prepare Assignables "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			p, err := m.Prepare(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			err = p.Plan(fieldNames...)
-			chk.NoError(err, describe)
-			//
-			ptrs, err := p.Assignables(nil)
-			chk.NoError(err, describe)
-			chk.Equal(len(fieldNames), len(ptrs), describe)
-		})
-		t.Run("Bind Field "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			b, err := m.Bind(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			for _, field := range test.Fields {
-				v, err := b.Field(field.Field)
-				chk.ErrorIs(err, field.Error, describe)
-				if err != nil {
-					continue
-				}
-				err = v.To(field.To)
-				chk.NoError(err, describe)
-				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
-			}
-		})
-		t.Run("Prepare Field "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			p, err := m.Prepare(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			err = p.Plan(fieldNames...)
-			chk.NoError(err, describe)
-			//
-			for _, field := range test.Fields {
-				v, err := p.Field()
-				chk.ErrorIs(err, field.Error, describe)
-				if err != nil {
-					continue
-				}
-				err = v.To(field.To)
-				chk.NoError(err, describe)
-				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
-			}
-		})
-		t.Run("Bind Fields "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			b, err := m.Bind(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			values, err := b.Fields(fieldNames, nil)
-			chk.NoError(err, describe)
-			chk.Equal(len(fieldNames), len(values), describe)
-		})
-		t.Run("Prepare Fields "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			p, err := m.Prepare(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			err = p.Plan(fieldNames...)
-			chk.NoError(err, describe)
-			//
-			values, err := p.Fields(nil)
-			chk.NoError(err, describe)
-			chk.Equal(len(fieldNames), len(values), describe)
-		})
-		t.Run("Bind Set "+test.Name, func(t *testing.T) {
-			chk := assert.New(t)
-			//
-			b, err := m.Bind(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			for _, field := range test.Fields {
-				err = b.Set(field.Field, field.To)
-				chk.ErrorIs(err, field.Error, describe)
-				if err != nil {
-					continue
-				}
-				v, _ := b.Field(field.Field)
-				chk.Equal(field.Expect, v.WriteValue.Interface(), describe)
 			}
 		})
 		t.Run("Prepare Set "+test.Name, func(t *testing.T) {
 			chk := assert.New(t)
+			var p set.PreparedMapping
+			var err error
 			//
-			p, err := m.Prepare(NewV(test.V))
-			chk.ErrorIs(err, test.MapperError, describe)
-			//
-			err = p.Plan(fieldNames...)
-			chk.NoError(err)
-			//
-			for _, field := range test.Fields {
-				err = p.Set(field.To)
-				chk.ErrorIs(err, field.Error, describe)
-				if err != nil {
-					continue
+			for k := 0; k < 2; k++ {
+				v := NewV(test.V)
+				if k == 0 {
+					p, err = m.Prepare(v)
+					chk.ErrorIs(err, test.MapperError, describe)
+					//
+					err = p.Plan(fieldNames...)
+					chk.NoError(err)
+				} else {
+					p.Rebind(v)
 				}
-				// TODO Need a way to confirm field was set correctly
+				//
+				for _, field := range test.Fields {
+					err = p.Set(field.To)
+					chk.ErrorIs(err, field.Error, describe)
+					if err != nil {
+						continue
+					}
+				}
+				// TODO Need better way to reset plan counter
+				p.Rebind(v) // Resets plan counter
+				for _, field := range test.Fields {
+					fv, err := p.Field()
+					chk.NoError(err)
+					chk.Equal(field.Expect, fv.WriteValue.Interface(), describe)
+				}
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package set
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -39,21 +40,6 @@ type BoundMapping struct {
 	paths map[string]path.ReflectPath
 }
 
-// pkgerr wraps any internal error inside of pkgerr type with contextual information.
-func (b BoundMapping) pkgerr(method string) pkgerr {
-	err := pkgerr{
-		Err:      b.err,
-		CallSite: "BoundMapping." + method,
-	}
-	switch b.err {
-	case ErrReadOnly:
-		err.Hint = "call to Mapper.Bind(" + b.top.String() + ") should have been Mapper.Bind(*" + b.top.String() + ")"
-	default:
-		err.Context = "value of " + b.top.String()
-	}
-	return err
-}
-
 // Assignables returns a slice of pointers to the fields in the currently bound struct
 // in the order specified by the fields argument.
 //
@@ -66,8 +52,8 @@ func (b BoundMapping) pkgerr(method string) pkgerr {
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
 func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
-	if b.err == ErrReadOnly {
-		return rv, b.pkgerr("Assignables")
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return rv, b.err.(pkgerr).WithCallSite("BoundMapping.Assignables")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -125,8 +111,8 @@ func (b BoundMapping) Err() error {
 
 // Field returns the *Value for field.
 func (b BoundMapping) Field(field string) (*Value, error) {
-	if b.err == ErrReadOnly {
-		return nil, b.pkgerr("Field")
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return nil, b.err.(pkgerr).WithCallSite("BoundMapping.Field")
 	}
 	step, ok := b.paths[field]
 	if !ok {
@@ -169,8 +155,8 @@ func (b BoundMapping) Field(field string) (*Value, error) {
 // An example use-case would be obtaining a slice of query arguments by column name during
 // database queries.
 func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
-	if b.err == ErrReadOnly {
-		return rv, b.pkgerr("Fields")
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return rv, b.err.(pkgerr).WithCallSite("BoundMapping.Fields")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -249,7 +235,7 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 // As a convenience Rebind allows v to be an instance of reflect.Value.  This prevents
 // unnecessary calls to reflect.Value.Interface().
 func (b *BoundMapping) Rebind(v interface{}) {
-	if b.err == ErrReadOnly {
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
 		return
 	}
 	//
@@ -271,8 +257,8 @@ func (b *BoundMapping) Rebind(v interface{}) {
 
 // Set effectively sets V[field] = value.
 func (b *BoundMapping) Set(field string, value interface{}) error {
-	if b.err == ErrReadOnly {
-		return b.pkgerr("Set")
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return b.err.(pkgerr).WithCallSite("BoundMapping.Set")
 	}
 	//
 	step, ok := b.paths[field]

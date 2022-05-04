@@ -113,8 +113,8 @@ func Example_mapperErrors() {
 	_, err = mapper.Prepare(company)
 	fmt.Println(err)
 
-	// Output: set: Mapper.Bind: read only value: set_test.Company is not writable: hint=[call to Mapper.Bind(set_test.Company) should have been Mapper.Bind(*set_test.Company)]
-	// set: Mapper.Prepare: read only value: set_test.Company is not writable: hint=[call to Mapper.Prepare(set_test.Company) should have been Mapper.Prepare(*set_test.Company)]
+	// Output: set: Mapper.Bind: read only value: hint=[call to Mapper.Bind(set_test.Company) should have been Mapper.Bind(*set_test.Company)]
+	// set: Mapper.Prepare: read only value: hint=[call to Mapper.Prepare(set_test.Company) should have been Mapper.Prepare(*set_test.Company)]
 }
 
 func Example_boundMappingErrors() {

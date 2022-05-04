@@ -127,21 +127,20 @@ var DefaultMapper = &Mapper{
 // I must be an addressable type.
 func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	value, writable := Writable(reflect.ValueOf(I))
-	top := reflect.TypeOf(I)
+	typ := reflect.TypeOf(I)
 	if !writable {
-		typeStr := top.String()
+		typeStr := typ.String()
 		err := pkgerr{
 			Err:      ErrReadOnly,
 			CallSite: "Mapper.Bind",
-			Context:  typeStr + " is not writable",
 			Hint:     "call to Mapper.Bind(" + typeStr + ") should have been Mapper.Bind(*" + typeStr + ")",
 		}
-		return BoundMapping{err: ErrReadOnly, top: top}, err
+		return BoundMapping{err: err}, err
 	}
 	mapping := me.Map(I)
 	//
 	rv := BoundMapping{
-		top:   top,
+		top:   typ,
 		value: value,
 		paths: mapping.ReflectPaths,
 	}
@@ -269,24 +268,26 @@ func (me *Mapper) Map(T interface{}) Mapping {
 // I must be an addressable type.
 func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
 	value, writable := Writable(reflect.ValueOf(I))
-	top := reflect.TypeOf(I)
+	typ := reflect.TypeOf(I)
 	if !writable {
-		typeStr := top.String()
+		typeStr := typ.String()
 		err := pkgerr{
 			Err:      ErrReadOnly,
 			CallSite: "Mapper.Prepare",
-			Context:  typeStr + " is not writable",
 			Hint:     "call to Mapper.Prepare(" + typeStr + ") should have been Mapper.Prepare(*" + typeStr + ")",
 		}
-		return PreparedMapping{err: ErrReadOnly, top: top}, err
+		return PreparedMapping{err: err}, err
 	}
 	//
 	mapping := me.Map(I)
 	//
 	rv := PreparedMapping{
-		top:   top,
+		top:   typ,
 		value: value,
-		err:   ErrNoPlan, // PreparedMappings are invalid until Plan() is called.
+		err: pkgerr{ // PreparedMappings are invalid until Plan() is called.
+			Err:  ErrNoPlan,
+			Hint: "call PreparedMapping.Plan to prepare access plan for " + typ.String(),
+		},
 		paths: mapping.ReflectPaths,
 	}
 	return rv, nil
