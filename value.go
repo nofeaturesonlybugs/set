@@ -4,16 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/nofeaturesonlybugs/errors"
-
 	"github.com/nofeaturesonlybugs/set/coerce"
-)
-
-var (
-	// ErrReadOnly is returned by methods requring writable access to a variable but it was not
-	// passed by address and is readonly.  It is commonly wrapped with a %T verb to describe the
-	// type that was passed.
-	ErrReadOnly = fmt.Errorf("set: value is readonly; pass by address")
 )
 
 // V returns a new Value.
@@ -35,6 +26,15 @@ func V(arg interface{}) *Value {
 	rv := &Value{}
 	rv.original = arg
 	//
+	if arg == nil {
+		rv.err = pkgerr{
+			Err:     ErrUnsupported,
+			Context: "nil value",
+			Hint:    "set.V(nil) was called",
+		}
+		return rv
+	}
+	//
 	var v reflect.Value
 	switch tt := arg.(type) {
 	case reflect.Value:
@@ -50,6 +50,14 @@ func V(arg interface{}) *Value {
 
 	if rv.IsMap || rv.IsSlice {
 		rv.ElemTypeInfo = TypeCache.StatType(rv.ElemType)
+	}
+
+	if !rv.CanWrite {
+		rv.err = pkgerr{
+			Err:     ErrReadOnly,
+			Context: rv.Type.String() + " is not writable",
+			Hint:    "call to set.V(" + rv.Type.String() + ") should have been set.V(*" + rv.Type.String() + ")",
+		}
 	}
 	return rv
 }
@@ -82,17 +90,12 @@ type Value struct {
 	// value.  Generally you should avoid it but it's also present if you really know what you're doing.
 	WriteValue reflect.Value
 
-	// When IsMap or IsSlice are true then ElemTypeInfo is a TypeInfo struct describing the element types.
+	// When IsMap or IsSlice are true then ElemTypeInfo is a TypeInfo struct describing the element type.
 	ElemTypeInfo TypeInfo
 
 	//
+	err      error
 	original interface{}
-}
-
-// errorUnsupported returns a string that can be used in an error message to indicate the underlying original type
-// does not support the requested operation.
-func (me *Value) errorUnsupported(method string) string {
-	return fmt.Sprintf("%v is unsupported for original type [%T]", method, me.original)
 }
 
 // Append appends the item(s) to the end of the Value assuming it is some type of slice and every
@@ -100,16 +103,16 @@ func (me *Value) errorUnsupported(method string) string {
 // or no items are appended and an error is returned describing the type of the item that could not
 // be appended.
 func (me *Value) Append(items ...interface{}) error {
-	if me == nil {
-		return errors.NilReceiver()
+	if me.err != nil {
+		return me.err.(pkgerr).WithCallSite("Value.Append")
 	} else if me.Kind != reflect.Slice {
-		return errors.Errorf(me.errorUnsupported("Append"))
+		return pkgerr{Err: ErrUnsupported, CallSite: "Value.Append", Context: "can not append to " + me.Type.String()}
 	}
 	var err error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				err = errors.Errorf("%v", r)
+				err = fmt.Errorf("%v", r) // TODO+NB Update this
 			}
 		}()
 		zero := reflect.Zero(me.Type)
@@ -117,7 +120,6 @@ func (me *Value) Append(items ...interface{}) error {
 			elem := reflect.New(me.ElemType)
 			elemAsValue := V(elem)
 			if err = elemAsValue.To(item); err != nil {
-				err = errors.Go(err)
 				return
 			}
 			zero = reflect.Append(zero, reflect.Indirect(elemAsValue.TopValue))
@@ -140,6 +142,7 @@ func (me *Value) Copy() *Value {
 		WriteValue:   me.WriteValue,
 		ElemTypeInfo: me.ElemTypeInfo,
 		original:     me.original,
+		err:          me.err,
 	}
 	return rv
 }
@@ -154,11 +157,9 @@ func (me *Value) Fields() []Field {
 		return nil
 	}
 	var rv []Field
-	if me != nil && me.IsStruct {
-		for k, max := 0, me.Type.NumField(); k < max; k++ {
-			v, f := me.WriteValue.Field(k), me.Type.Field(k)
-			rv = append(rv, Field{Value: V(v), Field: f})
-		}
+	for k, max := 0, me.Type.NumField(); k < max; k++ {
+		v, f := me.WriteValue.Field(k), me.Type.Field(k)
+		rv = append(rv, Field{Value: V(v), Field: f})
 	}
 	return rv
 }
@@ -169,22 +170,20 @@ func (me *Value) Fields() []Field {
 // the built-in causes panics while this one will return errors and this method will instantiate nil struct
 // members as it traverses.
 func (me *Value) FieldByIndex(index []int) (reflect.Value, error) {
-	v := reflect.Value{}
+	var v reflect.Value
 	size := len(index)
-	if me == nil {
-		return v, errors.NilReceiver()
-	} else if !me.CanWrite {
-		return v, errors.Errorf(me.errorUnsupported("FieldByIndex"))
+	if me.err != nil {
+		return v, me.err.(pkgerr).WithCallSite("Value.FieldByIndex")
 	} else if size == 0 {
-		return v, errors.Errorf("Zero length index provided to FieldByIndex()")
+		return v, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: "empty index"}
 	}
 	v = me.WriteValue
 	for k := 0; k < size; k++ {
 		n := index[k] // n is the index (or field num) to consider
 		if v.Kind() != reflect.Struct {
-			return v, errors.Errorf("FieldByIndex requires type to be a struct; type is %v", v.Type())
+			return v, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("want struct but got %v", v.Type())}
 		} else if n > v.NumField()-1 {
-			return v, fmt.Errorf("%w: field is len %v and index is %v", ErrIndexOutOfBounds, v.NumField(), n)
+			return v, pkgerr{Err: ErrIndexOutOfBounds, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("index %v exceeds max %v", n, v.NumField()-1)}
 		}
 		v = v.Field(n)
 		t, k := v.Type(), v.Kind()
@@ -210,7 +209,7 @@ func (me *Value) FieldByIndexAsValue(index []int) (*Value, error) {
 	var v reflect.Value
 	var err error
 	if v, err = me.FieldByIndex(index); err != nil {
-		return nil, errors.Go(err)
+		return nil, err
 	}
 	return V(v), nil
 }
@@ -218,12 +217,8 @@ func (me *Value) FieldByIndexAsValue(index []int) (*Value, error) {
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
 // TagValue member of Field will be set to the tag's value.
 func (me *Value) FieldsByTag(key string) []Field {
-	if me == nil || me.Kind != reflect.Struct {
-		return nil
-	}
 	var rv []Field
-	all := me.Fields()
-	for _, f := range all {
+	for _, f := range me.Fields() {
 		if value, ok := f.Field.Tag.Lookup(key); ok {
 			f.TagValue = value
 			rv = append(rv, f)
@@ -250,19 +245,19 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 			// to be either a struct or []struct that we can sub-fill.
 			if field.Value.IsStruct {
 				if err = fillFunc(field.Value, got); err != nil {
-					return errors.Go(err)
+					return err
 				}
 			} else if field.Value.IsSlice && field.Value.ElemTypeInfo.IsStruct {
 				if err = field.Value.Zero(); err != nil {
-					return errors.Go(err)
+					return err
 				}
 				elem := V(reflect.New(field.Value.ElemTypeInfo.Type))
 				if err = fillFunc(elem, got); err != nil {
-					return errors.Go(err)
+					return err
 				}
 				field.Value.Append(elem.WriteValue.Interface()) // This can return an error but it _should_be_ impossible.
 			} else {
-				return errors.Errorf("Getter.Get( %v ) returned a Getter for field %v and field is not fillable.", getName, field.Field.Name)
+				return pkgerr{Err: ErrUnsupported, CallSite: "Value.fill", Context: fmt.Sprintf("value is Getter but field %v is %v", getName, field.Value.Type)}
 			}
 
 		case []Getter:
@@ -271,12 +266,12 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 			if field.Value.IsSlice && field.Value.ElemTypeInfo.IsStruct {
 				// Zero out the existing slice.
 				if err = field.Value.Zero(); err != nil {
-					return errors.Go(err)
+					return err
 				}
 				for _, elemGetter := range got {
 					elem := V(reflect.New(field.Value.ElemTypeInfo.Type))
 					if err = fillFunc(elem, elemGetter); err != nil {
-						return errors.Go(err)
+						return err
 					}
 					field.Value.Append(elem.WriteValue.Interface()) // This can return an error but it _should_be impossible.
 				}
@@ -284,23 +279,23 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 				size := len(got)
 				if size > 0 {
 					if err = fillFunc(field.Value, got[size-1]); err != nil {
-						return errors.Go(err)
+						return err
 					}
 				}
 			} else {
-				return errors.Errorf("Getter.Get( %v ) returned a []Getter for field %v and field is not fillable.", getName, field.Field.Name)
+				return pkgerr{Err: ErrUnsupported, CallSite: "Value.fill", Context: fmt.Sprintf("value is []Getter but field %v is %v", getName, field.Value.Type)}
 			}
 
 		default:
 			if err = field.Value.To(got); err != nil {
-				return errors.Go(err)
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-// Fill iterates a struct's fields and calls Set() on each one by passing the field name to the Getter.
+// Fill iterates a struct's fields and calls To() on each one by passing the field name to the Getter.
 // Fill stops and returns on the first error encountered.
 func (me *Value) Fill(getter Getter) error {
 	fields := me.Fields()
@@ -369,10 +364,8 @@ func (me *Value) Rebind(arg interface{}) {
 
 // Zero sets the Value to the Zero value of the appropriate type.
 func (me *Value) Zero() error {
-	if me == nil {
-		return errors.NilReceiver()
-	} else if !me.CanWrite || me.Kind == reflect.Invalid {
-		return errors.Errorf(me.errorUnsupported("Zero"))
+	if me.err != nil {
+		return me.err.(pkgerr).WithCallSite("Value.Zero")
 	}
 	me.WriteValue.Set(reflect.Zero(me.Type))
 	return nil
@@ -381,10 +374,8 @@ func (me *Value) Zero() error {
 // NewElem instantiates and returns a *Value that can be Panics.Append()'ed to this type; only valid
 // if Value.ElemType describes a valid type.
 func (me *Value) NewElem() (*Value, error) {
-	if me == nil {
-		return nil, errors.NilReceiver()
-	} else if me.ElemTypeInfo.Kind == reflect.Invalid {
-		return nil, errors.Errorf(me.errorUnsupported("NewElem"))
+	if me.ElemTypeInfo.Kind == reflect.Invalid {
+		return nil, pkgerr{Err: ErrUnsupported, CallSite: "Value.NewElem", Context: fmt.Sprintf("%T is not an element container", me.original)}
 	}
 	return V(reflect.New(me.ElemType)), nil
 }
@@ -416,15 +407,14 @@ func (me *Value) NewElem() (*Value, error) {
 //		-> Note: If the elements themselves are pointers then, for example, T[0] and S[0] point
 //			at the same memory and will see changes to whatever is pointed at.
 func (me *Value) To(arg interface{}) error {
-	if me == nil {
-		return errors.NilReceiver()
-	} else if me.original == nil || !me.CanWrite || me.Kind == reflect.Invalid {
-		return errors.Errorf(me.errorUnsupported("To"))
+	if me.err != nil {
+		return me.err.(pkgerr).WithCallSite("Value.To")
 	} else if arg == nil {
 		return me.Zero()
 	}
 	//
 	// This typeswitch handles the case where we are a scalar.
+	// TODO Possibly benchmark switching on reflect.Kind vs type switching on me.original
 	switch me.Kind {
 	case reflect.Bool:
 		c, err := coerce.Bool(arg)

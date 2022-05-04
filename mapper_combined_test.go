@@ -172,22 +172,22 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 				chk.ErrorIs(err, set.ErrUnknownField, describe)
 				//
 				ptrs, err := p.Assignables(nil)
-				chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+				chk.ErrorIs(err, set.ErrNoPlan, describe)
 				chk.Nil(ptrs, describe)
 				//
 				for range fieldNames {
 					v, err := p.Field()
-					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+					chk.ErrorIs(err, set.ErrNoPlan, describe)
 					chk.Nil(v, describe)
 				}
 				//
 				values, err := p.Fields(nil)
-				chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+				chk.ErrorIs(err, set.ErrNoPlan, describe)
 				chk.Nil(values, describe)
 				//
 				for _, field := range test.Fields {
 					err = p.Set(field.To)
-					chk.ErrorIs(err, set.ErrPlanInvalid, describe)
+					chk.ErrorIs(err, set.ErrNoPlan, describe)
 				}
 			})
 			continue

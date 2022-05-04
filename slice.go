@@ -5,11 +5,6 @@ import (
 	"reflect"
 )
 
-var (
-	// ErrInvalidSlicePtr is returned by NewSlicePtr when the in coming value is not pointer-to-slice.
-	ErrInvalidSlicePtr = fmt.Errorf("set: expected pointer-to-slice *[]T")
-)
-
 // SlicePtr wraps around a *[]T and can be used by deserializers expecting
 // their argument to be passed as a pointer to a slice.
 //	func Deserializer(dst interface{}) error {

@@ -39,6 +39,21 @@ type BoundMapping struct {
 	paths map[string]path.ReflectPath
 }
 
+// pkgerr wraps any internal error inside of pkgerr type with contextual information.
+func (b BoundMapping) pkgerr(method string) pkgerr {
+	err := pkgerr{
+		Err:      b.err,
+		CallSite: "BoundMapping." + method,
+	}
+	switch b.err {
+	case ErrReadOnly:
+		err.Hint = "call to Mapper.Bind(" + b.top.String() + ") should have been Mapper.Bind(*" + b.top.String() + ")"
+	default:
+		err.Context = "value of " + b.top.String()
+	}
+	return err
+}
+
 // Assignables returns a slice of pointers to the fields in the currently bound struct
 // in the order specified by the fields argument.
 //
@@ -52,7 +67,7 @@ type BoundMapping struct {
 // query results.
 func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
 	if b.err == ErrReadOnly {
-		return rv, b.err
+		return rv, b.pkgerr("Assignables")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -60,7 +75,12 @@ func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interfac
 	for fieldN, name := range fields {
 		step, ok := b.paths[name]
 		if !ok {
-			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
+			err := pkgerr{
+				Err:      ErrUnknownField,
+				CallSite: "BoundMapping.Assignables",
+				Context:  "field [" + name + "] not found in type " + b.top.String(),
+			}
+			return rv, err
 		}
 		v := b.value
 		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -106,11 +126,16 @@ func (b BoundMapping) Err() error {
 // Field returns the *Value for field.
 func (b BoundMapping) Field(field string) (*Value, error) {
 	if b.err == ErrReadOnly {
-		return nil, b.err
+		return nil, b.pkgerr("Field")
 	}
 	step, ok := b.paths[field]
 	if !ok {
-		return nil, fmt.Errorf("%w: %v", ErrUnknownField, field)
+		err := pkgerr{
+			Err:      ErrUnknownField,
+			CallSite: "BoundMapping.Field",
+			Context:  "field [" + field + "] not found in type " + b.top.String(),
+		}
+		return nil, err
 	}
 	v := b.value
 	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -145,7 +170,7 @@ func (b BoundMapping) Field(field string) (*Value, error) {
 // database queries.
 func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
 	if b.err == ErrReadOnly {
-		return rv, b.err
+		return rv, b.pkgerr("Fields")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -153,7 +178,12 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 	for fieldN, name := range fields {
 		step, ok := b.paths[name]
 		if !ok {
-			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
+			err := pkgerr{
+				Err:      ErrUnknownField,
+				CallSite: "BoundMapping.Fields",
+				Context:  "field [" + name + "] not found in type " + b.top.String(),
+			}
+			return rv, err
 		}
 		v := b.value
 		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -242,12 +272,16 @@ func (b *BoundMapping) Rebind(v interface{}) {
 // Set effectively sets V[field] = value.
 func (b *BoundMapping) Set(field string, value interface{}) error {
 	if b.err == ErrReadOnly {
-		return b.err
+		return b.pkgerr("Set")
 	}
 	//
 	step, ok := b.paths[field]
 	if !ok {
-		err := fmt.Errorf("%w: %v", ErrUnknownField, field)
+		err := pkgerr{
+			Err:      ErrUnknownField,
+			CallSite: "BoundMapping.Set",
+			Context:  "field [" + field + "] not found in type " + b.top.String(),
+		}
 		if b.err == nil {
 			b.err = err
 		}

@@ -1,5 +1,34 @@
 /develop
 
+    + Breaking change (impact=high)
+        Methods on type Value with pointer receivers no longer perform nil receiver checks.
+        In the prior version calling a method with a nil receiver would return an error; in
+        this version a nil pointer panic will occur.
+        Migration steps:
+            Ensure you are creating set.Value correctly with calls to set.V().
+        Reason:
+            My programming style tends to be overly defensive and initially I felt any and
+            all methods with pointer receivers should be safe guarded by nil checks.  This
+            is not -- in general -- how the Go standard library is designed.  When using
+            types like bytes.Buffer or strings.Builder we are expected to instantiate and
+            consume them correctly.  The removal of nil receiver checks in this package is
+            more aligned with existing Go philosophy.  Furthermore Go has some of the
+            best tooling for testing and when used correctly should prevent panics from
+            occuring in production code.
+
+    + Breaking change (impact=low)
+        Package error handling has been refactored to use sentinal errors compatible
+        with errors.Is() unwrapping.
+        + This removes dependency on github.com/nofeaturesonlybugs/errors
+        + Errors no longer have stack trace information when printed with %#v verb.
+        Migration steps:
+            Probably none.
+        Reason:
+            Sentinal errors and compatibility with errors.Is() is more aligned with
+            the general Go philosophy regarding error handling.  It also removes a
+            dependency (on my errors package) which potential package consumers might
+            not want in their code base.
+
     + Breaking change (impact=low)
         Mapper.Map returns Mapping instead of *Mapping.
     

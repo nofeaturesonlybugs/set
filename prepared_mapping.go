@@ -8,15 +8,6 @@ import (
 	"github.com/nofeaturesonlybugs/set/path"
 )
 
-var (
-	// ErrPlanExceeded is returned when the next access to a PreparedMapping exceeds the
-	// fields specified by the earlier call to Plan.
-	ErrPlanExceeded = fmt.Errorf("set: prepared mapping: attempted access extends plan")
-
-	// ErrPlanInvalid is returned when a PreparedMapping does not have a valid access plan.
-	ErrPlanInvalid = fmt.Errorf("set: prepared mapping: plan invalid")
-)
-
 // PreparedMapping is returned from Mapper's Prepare method.
 //
 // A PreparedMapping must not be copied except via its Copy method.
@@ -63,6 +54,23 @@ type PreparedMapping struct {
 	paths map[string]path.ReflectPath
 }
 
+// pkgerr wraps any internal error inside of pkgerr type with contextual information.
+func (p PreparedMapping) pkgerr(method string) pkgerr {
+	err := pkgerr{
+		Err:      p.err,
+		CallSite: "PreparedMapping." + method,
+	}
+	switch p.err {
+	case ErrReadOnly:
+		err.Hint = "call to Mapper.Prepare(" + p.top.String() + ") should have been Mapper.Prepare(*" + p.top.String() + ")"
+	case ErrNoPlan:
+		err.Hint = "call PreparedMapping.Plan to prepare access plan for " + p.top.String()
+	default:
+		err.Context = "value of " + p.top.String()
+	}
+	return err
+}
+
 // Assignables returns a slice of pointers to the fields in the currently bound
 // struct in the order specified by the last call to Plan.
 //
@@ -76,7 +84,7 @@ type PreparedMapping struct {
 // query results.
 func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
-		return rv, p.err
+		return rv, p.pkgerr("Assignables")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
@@ -137,11 +145,11 @@ func (p PreparedMapping) Err() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Field() (*Value, error) {
 	if !p.valid {
-		return nil, p.err
+		return nil, p.pkgerr("Field")
 	}
 	//
 	if err := p.next(); err != nil {
-		return nil, err
+		return nil, pkgerr{Err: err, CallSite: "PreparedMapping.Field", Context: "value of " + p.top.String()}
 	}
 	//
 	step := p.plan[p.k]
@@ -178,7 +186,7 @@ func (p *PreparedMapping) Field() (*Value, error) {
 // database queries.
 func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
-		return rv, p.err
+		return rv, p.pkgerr("Fields")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(p.plan))
@@ -251,7 +259,7 @@ func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 // and the internal error is set to ErrPlanInvalid.
 func (p *PreparedMapping) Plan(fields ...string) error {
 	if p.err == ErrReadOnly {
-		return p.err
+		return p.pkgerr("Plan")
 	}
 	//
 	// Ensure p.plan has enough space and then reslice to empty.
@@ -259,12 +267,17 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 		p.plan = make([]path.ReflectPath, 0, max)
 	}
 	p.plan = p.plan[0:0]
+	// p.valid=false // TODO+NB Needs test case
 	//
 	for _, field := range fields {
 		path, ok := p.paths[field]
 		if !ok {
-			p.err = ErrPlanInvalid
-			return fmt.Errorf("%w: %v", ErrUnknownField, field)
+			p.err = ErrNoPlan
+			return pkgerr{
+				Err:      ErrUnknownField,
+				Context:  "field [" + field + "] not found in type " + p.top.String(),
+				CallSite: "PreparedMapping.Plan",
+			}
 		}
 		p.plan = append(p.plan, path)
 	}
@@ -314,9 +327,9 @@ func (p *PreparedMapping) next() error {
 	if p.k == len(p.plan) {
 		p.k--
 		if p.err == nil {
-			p.err = ErrPlanExceeded
+			p.err = ErrPlanOutOfBounds
 		}
-		return ErrPlanExceeded
+		return ErrPlanOutOfBounds
 	}
 	return nil
 }
@@ -331,13 +344,13 @@ func (p *PreparedMapping) next() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Set(value interface{}) error {
 	if !p.valid {
-		return p.err
+		return p.pkgerr("Set")
 	}
 	//
 	var err error
 	//
 	if err = p.next(); err != nil {
-		return err
+		return pkgerr{Err: err, CallSite: "PreparedMapping.Set", Context: "value of " + p.top.String()}
 	}
 	//
 	v := p.value

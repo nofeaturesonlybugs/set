@@ -11,12 +11,6 @@ import (
 	"github.com/nofeaturesonlybugs/set/path"
 )
 
-var (
-	// ErrUnknownField is returned by BoundMapping and PreparedMapping when given field
-	// has no correlating mapping within the struct hierarchy.
-	ErrUnknownField = fmt.Errorf("set: unknown field")
-)
-
 var mapperTreatAsScalar = map[reflect.Type]struct{}{
 	reflect.TypeOf(time.Time{}):  {},
 	reflect.TypeOf(&time.Time{}): {},
@@ -133,13 +127,21 @@ var DefaultMapper = &Mapper{
 // I must be an addressable type.
 func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 	value, writable := Writable(reflect.ValueOf(I))
+	top := reflect.TypeOf(I)
 	if !writable {
-		return BoundMapping{err: ErrReadOnly}, fmt.Errorf("%w: %T", ErrReadOnly, I)
+		typeStr := top.String()
+		err := pkgerr{
+			Err:      ErrReadOnly,
+			CallSite: "Mapper.Bind",
+			Context:  typeStr + " is not writable",
+			Hint:     "call to Mapper.Bind(" + typeStr + ") should have been Mapper.Bind(*" + typeStr + ")",
+		}
+		return BoundMapping{err: ErrReadOnly, top: top}, err
 	}
 	mapping := me.Map(I)
 	//
 	rv := BoundMapping{
-		top:   reflect.TypeOf(I),
+		top:   top,
 		value: value,
 		paths: mapping.ReflectPaths,
 	}
@@ -267,16 +269,24 @@ func (me *Mapper) Map(T interface{}) Mapping {
 // I must be an addressable type.
 func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
 	value, writable := Writable(reflect.ValueOf(I))
+	top := reflect.TypeOf(I)
 	if !writable {
-		return PreparedMapping{err: ErrReadOnly}, fmt.Errorf("%w: %T", ErrReadOnly, I)
+		typeStr := top.String()
+		err := pkgerr{
+			Err:      ErrReadOnly,
+			CallSite: "Mapper.Prepare",
+			Context:  typeStr + " is not writable",
+			Hint:     "call to Mapper.Prepare(" + typeStr + ") should have been Mapper.Prepare(*" + typeStr + ")",
+		}
+		return PreparedMapping{err: ErrReadOnly, top: top}, err
 	}
 	//
 	mapping := me.Map(I)
 	//
 	rv := PreparedMapping{
-		top:   reflect.TypeOf(I),
+		top:   top,
 		value: value,
-		err:   ErrPlanInvalid, // PreparedMappings are invalid until Plan() is called.
+		err:   ErrNoPlan, // PreparedMappings are invalid until Plan() is called.
 		paths: mapping.ReflectPaths,
 	}
 	return rv, nil
