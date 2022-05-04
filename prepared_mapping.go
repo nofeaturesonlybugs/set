@@ -43,7 +43,7 @@ type PreparedMapping struct {
 	// valid=true means PreparedMapping is valid and bound to a writable value.
 	// valid=false means PreparedMapping is invalid and most calls should return err.
 	valid bool
-	err   error
+	err   error // Must always be nil or instance of pkgerr{}
 
 	// plan is the slice of steps created by Plan and
 	// k is the index into plan for the next step.
