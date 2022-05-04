@@ -43,6 +43,33 @@ func ExampleBoundMapping_Rebind() {
 	// 3 Third
 }
 
+func ExampleBoundMapping_Rebind_panic() {
+	// BoundMapping.Rebind panics if the new instance is not the same type.
+
+	m := &set.Mapper{}
+
+	type S struct {
+		Str string
+	}
+	type Different struct {
+		Str string
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+		}
+	}()
+
+	var s S
+	var d Different
+
+	b, _ := m.Bind(&s)
+	b.Rebind(&d)
+
+	// Output: mismatching types during Rebind; have *set_test.S and got *set_test.Different
+}
+
 func ExampleBoundMapping_Rebind_reflectValue() {
 	// As a convenience BoundMapping.Rebind can be called with an instance of reflect.Value
 	// if-and-only-if the reflect.Value is holding a type compatible with the BoundMapping.

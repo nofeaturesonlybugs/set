@@ -148,11 +148,6 @@ func TestValue_set(t *testing.T) {
 		err := set.V(v).To(true)
 		chk.Error(err)
 	}
-	{ // Nil receiver
-		var v *set.Value
-		err := v.To("hi")
-		chk.Error(err)
-	}
 	{ // Only addressable values can be set; passing address-of local variable works.
 		var v bool
 		chk.Equal(false, v)
@@ -1539,6 +1534,9 @@ func TestValue_fieldByIndex(t *testing.T) {
 		A Foo
 		B Foo
 	}
+	type Ptr struct {
+		B **Bar
+	}
 	//
 	type IndexValue struct {
 		Index       []int
@@ -1586,6 +1584,35 @@ func TestValue_fieldByIndex(t *testing.T) {
 			To:     "-20",
 			Expect: -20,
 		},
+		// ptr
+		{
+			Name:   "ptr 0,0,0",
+			Dest:   &Ptr{},
+			Index:  []int{0, 0, 0},
+			To:     -20,
+			Expect: "-20",
+		},
+		{
+			Name:   "ptr 0,0,1",
+			Dest:   &Ptr{},
+			Index:  []int{0, 0, 1},
+			To:     "-20",
+			Expect: -20,
+		},
+		{
+			Name:   "ptr 0,1,0",
+			Dest:   &Ptr{},
+			Index:  []int{0, 1, 0},
+			To:     -20,
+			Expect: "-20",
+		},
+		{
+			Name:   "ptr 0,1,1",
+			Dest:   &Ptr{},
+			Index:  []int{0, 1, 1},
+			To:     "-20",
+			Expect: -20,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.Name+" "+fmt.Sprintf("%v", test.Index), func(t *testing.T) {
@@ -1628,10 +1655,6 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	}
 	var a A
 
-	field, err = value.FieldByIndexAsValue(nil)
-	chk.Error(err)
-	chk.Nil(field)
-	//
 	value = set.V(map[string]string{})
 	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
@@ -1771,7 +1794,16 @@ func TestValue_appendCodeCoverageErrors(t *testing.T) {
 		err = set.V(b).Append(42)
 		chk.Error(err)
 	}
-	{ // If *Value is nil
-		var value *set.Value
-		err = value.Append(42)
-		
+}
+
+func TestValue_newElemCodeCoverage(t *testing.T) {
+	chk := assert.New(t)
+	//
+	{ // Tests NewElem when *Value is not nil but not a map
+		var b bool
+		v := set.V(&b)
+		elem, err := v.NewElem()
+		chk.Error(err)
+		chk.Nil(elem)
+	}
+}

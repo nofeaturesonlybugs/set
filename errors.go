@@ -9,8 +9,8 @@ var (
 	// ErrIndexOutOfBounds is returned when an index operation exceeds a bounds check.
 	ErrIndexOutOfBounds = errors.New("index out of bounds")
 
-	// ErrInvalidSlicePtr is returned by NewSlicePtr when the in coming value is not pointer-to-slice.
-	ErrInvalidSlicePtr = errors.New("set: expected pointer-to-slice *[]T")
+	// ErrInvalidSlice is returned by NewSlice when the in coming value is not pointer-to-slice.
+	ErrInvalidSlice = errors.New("invalid slice")
 
 	// ErrNoPlan is returned when a PreparedMapping does not have a valid access plan.
 	ErrNoPlan = errors.New("no plan")
@@ -59,19 +59,5 @@ func (e pkgerr) Unwrap() error {
 func (e pkgerr) WithCallSite(callsite string) pkgerr {
 	rv := e
 	rv.CallSite = callsite
-	return rv
-}
-
-// WithContext returns a copy of pkgerr with Context set to the argument.
-func (e pkgerr) WithContext(context string) pkgerr {
-	rv := e
-	rv.Context = context
-	return rv
-}
-
-// WithContextf returns a copy of pkgerr with Context set to the arguments passed to fmt.Sprintf.
-func (e pkgerr) WithContextf(context string, args ...interface{}) pkgerr {
-	rv := e
-	rv.Context = fmt.Sprintf(context, args...)
 	return rv
 }

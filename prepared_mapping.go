@@ -300,7 +300,7 @@ func (p *PreparedMapping) Rebind(v interface{}) {
 	}
 	T := rv.Type()
 	if p.top != T {
-		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", p.value.Interface(), v)) // TODO ErrRebind maybe?
+		panic(fmt.Sprintf("mismatching types during Rebind; have %v and got %T", p.top.String(), v)) // TODO ErrRebind maybe?
 	}
 	//
 	if p.valid {
@@ -416,10 +416,13 @@ func (p *PreparedMapping) Set(value interface{}) error {
 	// If the type-switch above didn't hit then we'll coerce the
 	// fieldValue to a *Value and use our swiss-army knife Value.To().
 	err = V(v).To(value)
-	if err != nil && p.err == nil {
-		p.err = pkgerr{
+	if err != nil {
+		err = pkgerr{
 			Err:      err,
 			CallSite: "PreparedMapping.Set",
+		}
+		if p.err == nil {
+			p.err = err
 		}
 	}
 	return err

@@ -108,25 +108,19 @@ func (me *Value) Append(items ...interface{}) error {
 	} else if me.Kind != reflect.Slice {
 		return pkgerr{Err: ErrUnsupported, CallSite: "Value.Append", Context: "can not append to " + me.Type.String()}
 	}
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("%v", r) // TODO+NB Update this
-			}
-		}()
-		zero := reflect.Zero(me.Type)
-		for _, item := range items {
-			elem := reflect.New(me.ElemType)
-			elemAsValue := V(elem)
-			if err = elemAsValue.To(item); err != nil {
-				return
-			}
-			zero = reflect.Append(zero, reflect.Indirect(elemAsValue.TopValue))
+	//
+	zero := reflect.Zero(me.Type)
+	for _, item := range items {
+		elem := reflect.New(me.ElemType)
+		elemAsValue := V(elem)
+		if err := elemAsValue.To(item); err != nil {
+			return err
 		}
-		me.WriteValue.Set(reflect.AppendSlice(me.WriteValue, zero))
-	}()
-	return err
+		zero = reflect.Append(zero, reflect.Indirect(elemAsValue.TopValue))
+	}
+	me.WriteValue.Set(reflect.AppendSlice(me.WriteValue, zero))
+	//
+	return nil
 }
 
 // Copy creates a clone of the *Value and its internal members.
@@ -356,7 +350,8 @@ func (me *Value) Rebind(arg interface{}) {
 		v = reflect.ValueOf(arg)
 	}
 	if me.TopValue.Type() != v.Type() {
-		panic(fmt.Sprintf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg))
+		// panic(fmt.Sprintf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg)) // TODO RM
+		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", me.original, arg))
 	}
 	me.original, me.TopValue = arg, v
 	me.WriteValue, me.CanWrite = Writable(v)

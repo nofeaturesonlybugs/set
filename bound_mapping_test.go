@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -262,6 +263,10 @@ func TestBoundMapping_Fields(t *testing.T) {
 		S
 		Next S
 	}
+	type WithTime struct {
+		T time.Time
+		S []int
+	}
 	s := S{
 		A: "S.A",
 		B: 12345,
@@ -276,6 +281,7 @@ func TestBoundMapping_Fields(t *testing.T) {
 			B: 9999,
 		},
 	}
+	wt := WithTime{}
 	tests := []Test{
 		{
 			Name:   "&s one",
@@ -301,6 +307,13 @@ func TestBoundMapping_Fields(t *testing.T) {
 			Fields: []string{"Next_A", "Next_B", "S_B", "S_A"},
 			Expect: []interface{}{n.Next.A, n.Next.B, n.S.B, n.S.A},
 		},
+		// time.Time and S (for default case)
+		{
+			Name:   "with time",
+			V:      &wt,
+			Fields: []string{"T", "S"},
+			Expect: []interface{}{wt.T, wt.S},
+		},
 		// Unrecognized field
 		{
 			Name:   "unknown field",
@@ -313,7 +326,11 @@ func TestBoundMapping_Fields(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			chk := assert.New(t)
 			//
-			b, err := set.DefaultMapper.Bind(test.V)
+			m := set.Mapper{
+				TreatAsScalar: set.NewTypeList([]int(nil)),
+				Join:          "_",
+			}
+			b, err := m.Bind(test.V)
 			chk.NoError(err)
 			//
 			values, err := b.Fields(test.Fields, nil)

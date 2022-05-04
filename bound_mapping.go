@@ -249,7 +249,7 @@ func (b *BoundMapping) Rebind(v interface{}) {
 	}
 	T := rv.Type()
 	if b.top != T {
-		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", b.value.Interface(), v)) // TODO ErrRebind maybe?
+		panic(fmt.Sprintf("mismatching types during Rebind; have %v and got %T", b.top.String(), v)) // TODO ErrRebind maybe?
 	}
 	b.err = nil
 	b.value, _ = Writable(rv)
