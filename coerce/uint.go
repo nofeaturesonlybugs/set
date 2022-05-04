@@ -15,6 +15,8 @@ func parseUint(s string) (interface{}, error) {
 		return n, nil
 	} else if f, err := strconv.ParseFloat(s, 64); err == nil {
 		return f, nil
+	} else if b, err := strconv.ParseBool(s); err == nil {
+		return b, nil
 	}
 	return nil, fmt.Errorf("%w; could not parse %v", ErrInvalid, s)
 }
