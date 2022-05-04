@@ -22,13 +22,12 @@ type CSVUnmarshaler struct {
 // Load reads CSV data from r and deserializes each row into dst.
 func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 	// Expect dst to be a *[]T or pointer chain to []T where T is struct or pointer chain to struct.
-	ptr, err := set.NewSlicePtr(dst)
+	slice, err := set.Slice(dst)
 	if err != nil {
 		return err
-	} else if ptr.EndType.Kind() != reflect.Struct {
+	} else if slice.ElemEndType.Kind() != reflect.Struct {
 		return fmt.Errorf("dst elements should be struct or pointer to struct")
 	}
-	defer ptr.Commit()
 	//
 	m := u.Mapper
 	if m == nil {
@@ -49,7 +48,7 @@ func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 	c.ReuseRecord = true // From this point forward the csv reader can reuse the slice.
 	//
 	// Create a BoundMapping for element's type.
-	b, err := m.Bind(ptr.Elem().Interface())
+	b, err := m.Bind(slice.Elem().Interface())
 	if err != nil {
 		return err
 	}
@@ -61,8 +60,8 @@ func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 			return err
 		}
 		// Create a new element and bind to it.
-		elemValue := ptr.Elem() // Elem() returns reflect.Value and Rebind() conveniently
-		b.Rebind(elemValue)     // allows reflect.Value as an argument.
+		elemValue := slice.Elem() // Elem() returns reflect.Value and Rebind() conveniently
+		b.Rebind(elemValue)       // allows reflect.Value as an argument.
 		// Row is a slice of data and headers has the mapped names in corresponding indexes.
 		for k, columnName := range headers {
 			b.Set(columnName, row[k]) // err will be checked after iteration.
@@ -72,7 +71,7 @@ func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 			return err
 		}
 		// Append to dst.
-		ptr.Append(elemValue)
+		slice.Append(elemValue)
 	}
 }
 
