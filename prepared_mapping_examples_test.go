@@ -47,6 +47,33 @@ func ExamplePreparedMapping_Rebind() {
 	// 3 Third
 }
 
+func ExamplePreparedMapping_Rebind_panic() {
+	// PreparedMapping.Rebind panics if the new instance is not the same type.
+
+	m := &set.Mapper{}
+
+	type S struct {
+		Str string
+	}
+	type Different struct {
+		Str string
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+		}
+	}()
+
+	var s S
+	var d Different
+
+	p, _ := m.Prepare(&s)
+	p.Rebind(&d)
+
+	// Output: mismatching types during Rebind; have *set_test.S and got *set_test.Different
+}
+
 func ExamplePreparedMapping_Rebind_reflectValue() {
 	// As a convenience PreparedMapping.Rebind can be called with an instance of reflect.Value
 	// if-and-only-if the reflect.Value is holding a type compatible with the PreparedMapping.

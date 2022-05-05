@@ -1,6 +1,7 @@
 package set
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -51,8 +52,8 @@ type BoundMapping struct {
 // An example use-case would be obtaining a slice of pointers for Rows.Scan() during database
 // query results.
 func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interface{}, error) {
-	if b.err == ErrReadOnly {
-		return rv, b.err
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return rv, b.err.(pkgerr).WithCallSite("BoundMapping.Assignables")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -60,7 +61,12 @@ func (b BoundMapping) Assignables(fields []string, rv []interface{}) ([]interfac
 	for fieldN, name := range fields {
 		step, ok := b.paths[name]
 		if !ok {
-			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
+			err := pkgerr{
+				Err:      ErrUnknownField,
+				CallSite: "BoundMapping.Assignables",
+				Context:  "field [" + name + "] not found in type " + b.top.String(),
+			}
+			return rv, err
 		}
 		v := b.value
 		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -105,12 +111,17 @@ func (b BoundMapping) Err() error {
 
 // Field returns the *Value for field.
 func (b BoundMapping) Field(field string) (*Value, error) {
-	if b.err == ErrReadOnly {
-		return nil, b.err
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return nil, b.err.(pkgerr).WithCallSite("BoundMapping.Field")
 	}
 	step, ok := b.paths[field]
 	if !ok {
-		return nil, fmt.Errorf("%w: %v", ErrUnknownField, field)
+		err := pkgerr{
+			Err:      ErrUnknownField,
+			CallSite: "BoundMapping.Field",
+			Context:  "field [" + field + "] not found in type " + b.top.String(),
+		}
+		return nil, err
 	}
 	v := b.value
 	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -144,8 +155,8 @@ func (b BoundMapping) Field(field string) (*Value, error) {
 // An example use-case would be obtaining a slice of query arguments by column name during
 // database queries.
 func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, error) {
-	if b.err == ErrReadOnly {
-		return rv, b.err
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return rv, b.err.(pkgerr).WithCallSite("BoundMapping.Fields")
 	}
 	if rv == nil {
 		rv = make([]interface{}, len(fields))
@@ -153,7 +164,12 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 	for fieldN, name := range fields {
 		step, ok := b.paths[name]
 		if !ok {
-			return rv, fmt.Errorf("%w: %v", ErrUnknownField, name)
+			err := pkgerr{
+				Err:      ErrUnknownField,
+				CallSite: "BoundMapping.Fields",
+				Context:  "field [" + name + "] not found in type " + b.top.String(),
+			}
+			return rv, err
 		}
 		v := b.value
 		if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -219,7 +235,7 @@ func (b BoundMapping) Fields(fields []string, rv []interface{}) ([]interface{}, 
 // As a convenience Rebind allows v to be an instance of reflect.Value.  This prevents
 // unnecessary calls to reflect.Value.Interface().
 func (b *BoundMapping) Rebind(v interface{}) {
-	if b.err == ErrReadOnly {
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
 		return
 	}
 	//
@@ -233,7 +249,7 @@ func (b *BoundMapping) Rebind(v interface{}) {
 	}
 	T := rv.Type()
 	if b.top != T {
-		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", b.value.Interface(), v)) // TODO ErrRebind maybe?
+		panic(fmt.Sprintf("mismatching types during Rebind; have %v and got %T", b.top.String(), v)) // TODO ErrRebind maybe?
 	}
 	b.err = nil
 	b.value, _ = Writable(rv)
@@ -241,13 +257,17 @@ func (b *BoundMapping) Rebind(v interface{}) {
 
 // Set effectively sets V[field] = value.
 func (b *BoundMapping) Set(field string, value interface{}) error {
-	if b.err == ErrReadOnly {
-		return b.err
+	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
+		return b.err.(pkgerr).WithCallSite("BoundMapping.Set")
 	}
 	//
 	step, ok := b.paths[field]
 	if !ok {
-		err := fmt.Errorf("%w: %v", ErrUnknownField, field)
+		err := pkgerr{
+			Err:      ErrUnknownField,
+			CallSite: "BoundMapping.Set",
+			Context:  "field [" + field + "] not found in type " + b.top.String(),
+		}
 		if b.err == nil {
 			b.err = err
 		}

@@ -53,6 +53,11 @@ func Float32(v interface{}) (float32, error) {
 
 			} else if errors.Is(err, strconv.ErrRange) {
 				return 0, fmt.Errorf("%w; %v overflows float32", ErrOverflow, sw)
+			} else if b, berr := strconv.ParseBool(sw); berr == nil {
+				if b {
+					return 1, nil
+				}
+				return 0, nil
 			}
 			return 0, fmt.Errorf("%w; %v", ErrInvalid, err.Error())
 		}
@@ -152,6 +157,11 @@ func Float64(v interface{}) (float64, error) {
 				return float64(f), nil
 			} else if errors.Is(err, strconv.ErrRange) {
 				return 0, fmt.Errorf("%w; %v overflows float64", ErrOverflow, sw)
+			} else if b, berr := strconv.ParseBool(sw); berr == nil {
+				if b {
+					return 1, nil
+				}
+				return 0, nil
 			}
 			return 0, fmt.Errorf("%w; %v", ErrInvalid, err.Error())
 		}

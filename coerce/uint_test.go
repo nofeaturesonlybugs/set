@@ -520,6 +520,23 @@ func TestUintFromString(t *testing.T) {
 			To:      S("3.14"),
 			Expect8: 3, Expect16: 3, Expect32: 3, Expect64: 3, Expect: 3,
 		},
+
+		`"false"`: {
+			To:      "false",
+			Expect8: 0, Expect16: 0, Expect32: 0, Expect64: 0, Expect: 0,
+		},
+		`"true"`: {
+			To:      "true",
+			Expect8: 1, Expect16: 1, Expect32: 1, Expect64: 1, Expect: 1,
+		},
+		`S("false")`: {
+			To:      S("false"),
+			Expect8: 0, Expect16: 0, Expect32: 0, Expect64: 0, Expect: 0,
+		},
+		`S("true")`: {
+			To:      S("true"),
+			Expect8: 1, Expect16: 1, Expect32: 1, Expect64: 1, Expect: 1,
+		},
 	}
 	if strconv.IntSize == 64 {
 		tests["max64"].Expect = math.MaxUint64

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -79,7 +80,7 @@ func TestPreparedMapping_Assignables(t *testing.T) {
 			ptrs, err := p.Assignables(nil)
 			chk.Equal(test.Expect, ptrs)
 			if errors.Is(test.Error, set.ErrUnknownField) {
-				chk.ErrorIs(err, set.ErrPlanInvalid)
+				chk.ErrorIs(err, set.ErrNoPlan)
 			} else {
 				chk.NoError(err)
 				for k := range test.Expect {
@@ -241,14 +242,13 @@ func TestPreparedMapping_Err(t *testing.T) {
 		//
 		err = p.Set(42)
 		chk.NoError(err)
-		chk.Equal(err, p.Err())
 		// cause error
 		err = p.Set("does not exist")
-		chk.ErrorIs(err, set.ErrPlanExceeded)
-		chk.Equal(err, p.Err())
+		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 	})
+	// This test depends on p's state from the previous test.
 	t.Run("plan clears error", func(t *testing.T) {
-		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
 		err = p.Plan("A") // Should clear error
 		chk.NoError(err)
 		chk.Nil(p.Err())
@@ -257,15 +257,24 @@ func TestPreparedMapping_Err(t *testing.T) {
 		chk.Nil(p.Err())
 		// cause error
 		err = p.Set("does not exist")
-		chk.ErrorIs(err, set.ErrPlanExceeded)
-		chk.Equal(err, p.Err())
+		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 	})
+	// This test depends on p's state from the previous test.
 	t.Run("rebind clears error", func(t *testing.T) {
 		chk := assert.New(t)
 		//
-		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
 		p.Rebind(&o)
 		chk.Nil(p.Err())
+	})
+	// This test does not depend on previous state.
+	t.Run("invalid value", func(t *testing.T) {
+		chk := assert.New(t)
+		//
+		err := p.Plan("A")
+		chk.NoError(err)
+		err = p.Set("Hello")
+		chk.Error(err)
 	})
 }
 
@@ -300,8 +309,8 @@ func TestPreparedMapping_Field(t *testing.T) {
 		chk.NoError(err)
 		v.To("First")
 		v, err = p.Field()
-		chk.ErrorIs(err, set.ErrPlanExceeded)
-		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
+		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
 		chk.Nil(v)
 
 		p.Rebind(&b)
@@ -313,8 +322,8 @@ func TestPreparedMapping_Field(t *testing.T) {
 		chk.NoError(err)
 		v.To("Second")
 		v, err = p.Field()
-		chk.ErrorIs(err, set.ErrPlanExceeded)
-		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
+		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
 		chk.Nil(v)
 
 		chk.Equal("First", a.A)
@@ -340,8 +349,8 @@ func TestPreparedMapping_Field(t *testing.T) {
 		v, _ = p.Field()
 		v.To(10)
 		v, err = p.Field()
-		chk.ErrorIs(err, set.ErrPlanExceeded)
-		chk.ErrorIs(p.Err(), set.ErrPlanExceeded)
+		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
+		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
 
 		p.Rebind(&n)
 		chk.Nil(p.Err())
@@ -386,7 +395,7 @@ func TestPreparedMapping_Field(t *testing.T) {
 		chk.NoError(err)
 
 		_, err = p.Field()
-		chk.ErrorIs(err, set.ErrPlanInvalid)
+		chk.ErrorIs(err, set.ErrNoPlan)
 	})
 }
 
@@ -406,6 +415,15 @@ func TestPreparedMapping_Fields(t *testing.T) {
 		S
 		Next S
 	}
+	//
+	type Interfacer interface {
+		Interfacer()
+	}
+	type WithTime struct {
+		T time.Time
+		S []int
+	}
+	//
 	s := S{
 		A: "S.A",
 		B: 12345,
@@ -420,6 +438,7 @@ func TestPreparedMapping_Fields(t *testing.T) {
 			B: 9999,
 		},
 	}
+	wt := WithTime{}
 	tests := []Test{
 		{
 			Name:   "&s one",
@@ -446,6 +465,13 @@ func TestPreparedMapping_Fields(t *testing.T) {
 			Fields: []string{"Next_A", "Next_B", "S_B", "S_A"},
 			Expect: []interface{}{n.Next.A, n.Next.B, n.S.B, n.S.A},
 		},
+		// time.Time and S (for default case)
+		{
+			Name:   "with time",
+			V:      &wt,
+			Fields: []string{"T", "S"},
+			Expect: []interface{}{wt.T, wt.S},
+		},
 		// Unrecognized field
 		{
 			Name:   "unknown field",
@@ -458,7 +484,11 @@ func TestPreparedMapping_Fields(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			chk := assert.New(t)
 			//
-			p, err := set.DefaultMapper.Prepare(test.V)
+			m := set.Mapper{
+				TreatAsScalar: set.NewTypeList([]int(nil)),
+				Join:          "_",
+			}
+			p, err := m.Prepare(test.V)
 			chk.NoError(err)
 			//
 			err = p.Plan(test.Fields...)
@@ -467,7 +497,7 @@ func TestPreparedMapping_Fields(t *testing.T) {
 			values, err := p.Fields(nil)
 			chk.Equal(test.Expect, values)
 			if errors.Is(test.Error, set.ErrUnknownField) {
-				chk.ErrorIs(err, set.ErrPlanInvalid)
+				chk.ErrorIs(err, set.ErrNoPlan)
 			} else {
 				chk.NoError(err)
 				for k := range test.Expect {

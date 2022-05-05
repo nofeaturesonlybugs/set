@@ -1,6 +1,7 @@
 package set_test
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -145,11 +146,6 @@ func TestValue_set(t *testing.T) {
 	{ // Only addressable values can be set; passing local variable fails.
 		var v bool
 		err := set.V(v).To(true)
-		chk.Error(err)
-	}
-	{ // Nil receiver
-		var v *set.Value
-		err := v.To("hi")
 		chk.Error(err)
 	}
 	{ // Only addressable values can be set; passing address-of local variable works.
@@ -1530,116 +1526,120 @@ func TestValue_fillNestedPointersByMapWithNils(t *testing.T) {
 }
 
 func TestValue_fieldByIndex(t *testing.T) {
+	type Foo struct {
+		Str string
+		Num int
+	}
+	type Bar struct {
+		A Foo
+		B Foo
+	}
+	type Ptr struct {
+		B **Bar
+	}
+	//
+	type IndexValue struct {
+		Index       []int
+		Value       interface{}
+		Expect      interface{}
+		IndexError  error
+		AssignError error
+	}
+	type FieldByIndexTest struct {
+		Name       string
+		Dest       interface{}
+		Index      []int
+		IndexError error
+		To         interface{}
+		Expect     interface{}
+		ToError    error
+	}
+	//
+	tests := []FieldByIndexTest{
+		{
+			Name:   "bar",
+			Dest:   &Bar{},
+			Index:  []int{0, 0}, // A.Str
+			To:     10,
+			Expect: "10",
+		},
+		{
+			Name:   "bar",
+			Dest:   &Bar{},
+			Index:  []int{0, 1}, // A.Num
+			To:     "-10",
+			Expect: -10,
+		},
+		{
+			Name:   "bar",
+			Dest:   &Bar{},
+			Index:  []int{1, 0}, // B.Str
+			To:     20,
+			Expect: "20",
+		},
+		{
+			Name:   "bar",
+			Dest:   &Bar{},
+			Index:  []int{1, 1}, // B.Num
+			To:     "-20",
+			Expect: -20,
+		},
+		// ptr
+		{
+			Name:   "ptr 0,0,0",
+			Dest:   &Ptr{},
+			Index:  []int{0, 0, 0},
+			To:     -20,
+			Expect: "-20",
+		},
+		{
+			Name:   "ptr 0,0,1",
+			Dest:   &Ptr{},
+			Index:  []int{0, 0, 1},
+			To:     "-20",
+			Expect: -20,
+		},
+		{
+			Name:   "ptr 0,1,0",
+			Dest:   &Ptr{},
+			Index:  []int{0, 1, 0},
+			To:     -20,
+			Expect: "-20",
+		},
+		{
+			Name:   "ptr 0,1,1",
+			Dest:   &Ptr{},
+			Index:  []int{0, 1, 1},
+			To:     "-20",
+			Expect: -20,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.Name+" "+fmt.Sprintf("%v", test.Index), func(t *testing.T) {
+			chk := assert.New(t)
+			v := set.V(test.Dest)
+			f, err := v.FieldByIndex(test.Index)
+			chk.ErrorIs(err, test.IndexError)
+			if test.IndexError == nil {
+				fv := set.V(f)
+				err = fv.To(test.To)
+				chk.ErrorIs(err, test.ToError)
+				chk.Equal(test.Expect, fv.WriteValue.Interface())
+			}
+		})
+	}
+}
+
+func TestValue_fieldByIndex_outOfRange(t *testing.T) {
 	chk := assert.New(t)
-	var field *set.Value
-	var err error
-	{ // No pointers.
-		type CommonDb struct {
-			Pk          int    `db:"pk" json:"id"`
-			CreatedTime string `db:"created_tmz" json:"created_time"`
-			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
-		}
-		type Person struct {
-			CommonDb
-			Name string
-			Age  int
-		}
-		type Combined struct {
-			Child     Person
-			Parent    Person
-			Emergency Person `db:"Emergency"`
-		}
-		var data Combined
-		outer := set.V(&data)
-		//
-		// Combined.Child.Pk
-		field, err = outer.FieldByIndexAsValue([]int{0, 0, 0})
-		chk.NoError(err)
-		chk.NotNil(field)
-		err = field.To(15)
-		chk.NoError(err)
-		chk.Equal(15, data.Child.Pk)
-		// Combined.Emergency.Name
-		field, err = outer.FieldByIndexAsValue([]int{2, 1})
-		chk.NoError(err)
-		chk.NotNil(field)
-		err = field.To("Bob")
-		chk.NoError(err)
-		chk.Equal("Bob", data.Emergency.Name)
+	type S struct {
+		A int
 	}
-	{ // Pointers.
-		type CommonDb struct {
-			Pk          int    `db:"pk" json:"id"`
-			CreatedTime string `db:"created_tmz" json:"created_time"`
-			UpdatedTime string `db:"modified_tmz" json:"modified_time"`
-		}
-		type Person struct {
-			*CommonDb
-			Name string
-			Age  int
-		}
-		type Combined struct {
-			Child     *Person
-			Parent    *Person
-			Emergency *Person `db:"Emergency"`
-		}
-		var data Combined
-		outer := set.V(&data)
-		set := func(indeces []int, arg interface{}) {
-			field, err = outer.FieldByIndexAsValue(indeces)
-			chk.NoError(err)
-			chk.NotNil(field)
-			err = field.To(arg)
-			chk.NoError(err)
-		}
-		//
-		set([]int{0, 0, 0}, 1)
-		set([]int{0, 0, 1}, "0c")
-		set([]int{0, 0, 2}, "0u")
-		set([]int{0, 1}, "Bob")
-		set([]int{0, 2}, 5)
-		//
-		set([]int{1, 0, 0}, 5)
-		set([]int{1, 0, 1}, "5c")
-		set([]int{1, 0, 2}, "5u")
-		set([]int{1, 1}, "Sally")
-		set([]int{1, 2}, 30)
-		//
-		set([]int{2, 0, 0}, 90)
-		set([]int{2, 0, 1}, "90c")
-		set([]int{2, 0, 2}, "90u")
-		set([]int{2, 1}, "Suzy")
-		set([]int{2, 2}, 25)
-		//
-		chk.Equal(1, data.Child.Pk)
-		chk.Equal("0c", data.Child.CreatedTime)
-		chk.Equal("0u", data.Child.UpdatedTime)
-		chk.Equal("Bob", data.Child.Name)
-		chk.Equal(5, data.Child.Age)
-		//
-		chk.Equal(5, data.Parent.Pk)
-		chk.Equal("5c", data.Parent.CreatedTime)
-		chk.Equal("5u", data.Parent.UpdatedTime)
-		chk.Equal("Sally", data.Parent.Name)
-		chk.Equal(30, data.Parent.Age)
-		//
-		chk.Equal(90, data.Emergency.Pk)
-		chk.Equal("90c", data.Emergency.CreatedTime)
-		chk.Equal("90u", data.Emergency.UpdatedTime)
-		chk.Equal("Suzy", data.Emergency.Name)
-		chk.Equal(25, data.Emergency.Age)
-		//
-		// Index out of bounds
-		field, err = outer.FieldByIndexAsValue([]int{0, 0, 4})
-		chk.Nil(field)
-		chk.Error(err)
-		field, err = outer.FieldByIndexAsValue([]int{0, 6})
-		chk.Nil(field)
-		chk.Error(err)
-		field, err = outer.FieldByIndexAsValue([]int{10})
-		chk.Nil(field)
-		chk.Error(err)
-	}
+	var s S
+	_, err := set.V(&s).FieldByIndex([]int{0})
+	chk.NoError(err)
+	_, err = set.V(&s).FieldByIndex([]int{1})
+	chk.ErrorIs(err, set.ErrIndexOutOfBounds)
 }
 
 func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
@@ -1655,10 +1655,6 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	}
 	var a A
 
-	field, err = value.FieldByIndexAsValue(nil)
-	chk.Error(err)
-	chk.Nil(field)
-	//
 	value = set.V(map[string]string{})
 	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
@@ -1798,33 +1794,11 @@ func TestValue_appendCodeCoverageErrors(t *testing.T) {
 		err = set.V(b).Append(42)
 		chk.Error(err)
 	}
-	{ // If *Value is nil
-		var value *set.Value
-		err = value.Append(42)
-		chk.Error(err)
-	}
-}
-
-func TestValue_zeroCodeCoverageErrors(t *testing.T) {
-	chk := assert.New(t)
-	//
-	var err error
-	{ // If *Value is nil
-		var value *set.Value
-		err = value.Zero()
-		chk.Error(err)
-	}
 }
 
 func TestValue_newElemCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	//
-	{ // Tests NewElem when *Value is nil
-		var v *set.Value
-		elem, err := v.NewElem()
-		chk.Error(err)
-		chk.Nil(elem)
-	}
 	{ // Tests NewElem when *Value is not nil but not a map
 		var b bool
 		v := set.V(&b)

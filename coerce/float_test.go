@@ -301,6 +301,23 @@ func TestFloatFromString(t *testing.T) {
 			To:       S(String(float32(math.MaxFloat32))),
 			Expect32: math.MaxFloat32, Expect64: float64(math.MaxFloat32),
 		},
+
+		`"false"`: {
+			To:       "false",
+			Expect32: 0, Expect64: 0,
+		},
+		`"true"`: {
+			To:       "true",
+			Expect32: 1, Expect64: 1,
+		},
+		`S("false")`: {
+			To:       S("false"),
+			Expect32: 0, Expect64: 0,
+		},
+		`S("true")`: {
+			To:       S("true"),
+			Expect32: 1, Expect64: 1,
+		},
 	}
 	tests.Run(t)
 }
