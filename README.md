@@ -498,8 +498,24 @@ I am making a very concerted effort to break the API as little as possible while
 
 - 0.4.0 ⭢ TODO
 
-  - TODO Numerous breaking changes.
-  - Remove erroneous documentation for Value.To method.  
+  - All or nearly all errors returned by this package are now sentinal errors compatible with `errors.Is()`.
+  - BoundMapping is now a struct and no longer an interface.
+    - The prior version used an internal private type with pointer-recievers to fulfill the
+      `BoundMapping` interface.
+    - This version uses a struct with mixed pointer and value receivers.
+    - Passing a `BoundMapping` as a function or method argument in the previous release is not guaranteed to work the same in this release due to the semantic difference between receiver types.
+  - Mapper.Bind() returns `(BoundMapping, error)` instead of just `BoundMapping`.
+  - Methods for type `Value` no longer perform `nil` check.
+    - This can lead to panics in your code if you have not been correctly creating \*set.Value instances with calls to `set.V()`.
+    - This change aligns with Go's standard library where types like strings.Builder or bytes.Buffer
+      are required to be created and used correctly.
+  - `Value.To()` and _type coercion_ internally rewritten.
+
+    - The prior version used an internal and poor-performing algorithm for type coercion.
+    - This version contains a subpackage named `coerce` that has a much better _type coercion_ implementation. It is both faster and more capable of returning good errors such as numeric overflow.
+    - Considerable effort was spent ensuring the new _type coercion_ code is correct and yields expected results; however I can not guarantee that this version coerces values completely equal to the prior version.
+
+  - Remove erroneous documentation for `Value.To` method.  
     The documentation indicated that when Dst and Src are both pointers with same level of indirection that direct assignment was performed. This is not true. The Value type uses the values at the end of pointers and pointer chains and therefore does not perform direct assignment of pointer values.
 
 - 0.3.0 ⭢ 0.4.0  
