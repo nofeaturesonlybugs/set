@@ -126,8 +126,17 @@ var DefaultMapper = &Mapper{
 //
 // I must be an addressable type.
 func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
-	value, writable := Writable(reflect.ValueOf(I))
-	typ := reflect.TypeOf(I)
+	var value reflect.Value
+	var typ reflect.Type
+	var writable bool
+	switch sw := I.(type) {
+	case reflect.Value:
+		typ = sw.Type()
+		value, writable = Writable(sw)
+	default:
+		typ = reflect.TypeOf(I)
+		value, writable = Writable(reflect.ValueOf(I))
+	}
 	if !writable {
 		typeStr := typ.String()
 		err := pkgerr{
@@ -161,10 +170,10 @@ func (me *Mapper) Bind(I interface{}) (BoundMapping, error) {
 func (me *Mapper) Map(T interface{}) Mapping {
 	var typeInfo TypeInfo
 	switch tt := T.(type) {
-	case *Value:
-		typeInfo = tt.TypeInfo
 	case reflect.Type:
 		typeInfo = TypeCache.StatType(tt)
+	case reflect.Value:
+		typeInfo = TypeCache.StatType(tt.Type())
 	default:
 		typeInfo = TypeCache.Stat(T)
 	}
@@ -267,8 +276,17 @@ func (me *Mapper) Map(T interface{}) Mapping {
 //
 // I must be an addressable type.
 func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
-	value, writable := Writable(reflect.ValueOf(I))
-	typ := reflect.TypeOf(I)
+	var value reflect.Value
+	var typ reflect.Type
+	var writable bool
+	switch sw := I.(type) {
+	case reflect.Value:
+		typ = sw.Type()
+		value, writable = Writable(sw)
+	default:
+		value, writable = Writable(reflect.ValueOf(I))
+		typ = reflect.TypeOf(I)
+	}
 	if !writable {
 		typeStr := typ.String()
 		err := pkgerr{

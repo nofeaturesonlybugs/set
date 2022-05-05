@@ -499,16 +499,20 @@ I am making a very concerted effort to break the API as little as possible while
 - 0.4.0 ⭢ TODO
 
   - All or nearly all errors returned by this package are now sentinal errors compatible with `errors.Is()`.
-  - BoundMapping is now a struct and no longer an interface.
+  - `BoundMapping` is now a struct and no longer an interface.
     - The prior version used an internal private type with pointer-recievers to fulfill the
       `BoundMapping` interface.
     - This version uses a struct with mixed pointer and value receivers.
     - Passing a `BoundMapping` as a function or method argument in the previous release is not guaranteed to work the same in this release due to the semantic difference between receiver types.
-  - Mapper.Bind() returns `(BoundMapping, error)` instead of just `BoundMapping`.
-  - Methods for type `Value` no longer perform `nil` check.
-    - This can lead to panics in your code if you have not been correctly creating \*set.Value instances with calls to `set.V()`.
-    - This change aligns with Go's standard library where types like strings.Builder or bytes.Buffer
-      are required to be created and used correctly.
+  - `Mapper.Bind()` returns `(BoundMapping, error)` instead of just `BoundMapping`.
+  - `Mapper.Bind()` previously accepted a `*Value` as an argument. This is no longer supported.
+    - This use case was buried inside package tests and there was only a single small test for this usage.
+    - Since `Mapper.Bind` now accepts `reflect.Value` as an argument the behavior is still supported:
+      - Prior version: `m.Bind(v)` where m is a `Mapper` and v is a `*Value`
+      - Current version: `m.Bind(v.TopValue)`
+  - `Value` is now a value type and not a pointer type. Any methods that previously returned `*Value` now return `Value`.
+    - Most methods on `Value` have been altered to use value receivers, except the `Rebind` method which requires a pointer receiver.
+    - The `Rebind` method no longer performs a `nil` receiver check.
   - `Value.To()` and _type coercion_ internally rewritten.
 
     - The prior version used an internal and poor-performing algorithm for type coercion.

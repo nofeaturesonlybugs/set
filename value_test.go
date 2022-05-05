@@ -1645,7 +1645,7 @@ func TestValue_fieldByIndex_outOfRange(t *testing.T) {
 func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	chk := assert.New(t)
 	var err error
-	var value, field *set.Value
+	var value, field set.Value
 	type A struct {
 		A string
 	}
@@ -1658,20 +1658,20 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	value = set.V(map[string]string{})
 	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
-	chk.Nil(field)
+	chk.False(field.TopValue.IsValid())
 	//
 	value = set.V(a)
 	field, err = value.FieldByIndexAsValue([]int{0})
 	chk.Error(err)
-	chk.Nil(field)
+	chk.False(field.TopValue.IsValid())
 	//
 	value = set.V(&a)
 	field, err = value.FieldByIndexAsValue(nil)
 	chk.Error(err)
-	chk.Nil(field)
+	chk.False(field.TopValue.IsValid())
 	field, err = value.FieldByIndexAsValue([]int{})
 	chk.Error(err)
-	chk.Nil(field)
+	chk.False(field.TopValue.IsValid())
 	//
 	{ // Test scalar, aka something not indexable.
 		var b bool
@@ -1681,10 +1681,10 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 			chk.Error(err)
 			chk.Equal(true, field.IsValid())
 		}
-		{ // When *Value is returned
+		{ // When Value is returned
 			field, err := value.FieldByIndexAsValue([]int{1, 2})
 			chk.Error(err)
-			chk.Nil(field)
+			chk.False(field.TopValue.IsValid())
 		}
 	}
 }
@@ -1799,11 +1799,11 @@ func TestValue_appendCodeCoverageErrors(t *testing.T) {
 func TestValue_newElemCodeCoverage(t *testing.T) {
 	chk := assert.New(t)
 	//
-	{ // Tests NewElem when *Value is not nil but not a map
+	{ // Tests NewElem when Value is not nil but not a map
 		var b bool
 		v := set.V(&b)
 		elem, err := v.NewElem()
 		chk.Error(err)
-		chk.Nil(elem)
+		chk.False(elem.TopValue.IsValid())
 	}
 }

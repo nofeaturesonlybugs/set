@@ -109,10 +109,10 @@ func (b BoundMapping) Err() error {
 	return b.err
 }
 
-// Field returns the *Value for field.
-func (b BoundMapping) Field(field string) (*Value, error) {
+// Field returns the Value for field.
+func (b BoundMapping) Field(field string) (Value, error) {
 	if b.err != nil && errors.Is(b.err, ErrReadOnly) {
-		return nil, b.err.(pkgerr).WithCallSite("BoundMapping.Field")
+		return zeroV, b.err.(pkgerr).WithCallSite("BoundMapping.Field")
 	}
 	step, ok := b.paths[field]
 	if !ok {
@@ -121,7 +121,7 @@ func (b BoundMapping) Field(field string) (*Value, error) {
 			CallSite: "BoundMapping.Field",
 			Context:  "field [" + field + "] not found in type " + b.top.String(),
 		}
-		return nil, err
+		return zeroV, err
 	}
 	v := b.value
 	if step.HasPointer { // NB  Begin manual inline of path.ReflectPath.Value
@@ -241,13 +241,15 @@ func (b *BoundMapping) Rebind(v interface{}) {
 	//
 	// Allow reflect.Value to be passed directly.
 	var rv reflect.Value
+	var T reflect.Type
 	switch sw := v.(type) {
 	case reflect.Value:
 		rv = sw
+		T = rv.Type()
 	default:
 		rv = reflect.ValueOf(v)
+		T = rv.Type()
 	}
-	T := rv.Type()
 	if b.top != T {
 		panic(fmt.Sprintf("mismatching types during Rebind; have %v and got %T", b.top.String(), v)) // TODO ErrRebind maybe?
 	}
@@ -340,7 +342,7 @@ func (b *BoundMapping) Set(field string, value interface{}) error {
 	}
 	//
 	// If the type-switch above didn't hit then we'll coerce the
-	// fieldValue to a *Value and use our swiss-army knife Value.To().
+	// fieldValue to a Value and use our swiss-army knife Value.To().
 	err := V(v).To(value)
 	if err != nil && b.err == nil {
 		b.err = err // TODO Possibly wrap with more information.

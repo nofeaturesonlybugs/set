@@ -269,16 +269,6 @@ func TestMapperCodeCoverage(t *testing.T) {
 		err = bound.Set("Huh", false)
 		chk.ErrorIs(err, set.ErrUnknownField)
 	}
-	{ // Tests Mapper.Bind when bound value is already a *set.Value and BoundMapping.Rebind when value is already a *set.Value
-		type T struct {
-			A string
-		}
-		var t, u T
-		vt, vu := set.V(&t), set.V(&u)
-		bound, err := set.DefaultMapper.Bind(vt)
-		chk.NoError(err)
-		bound.Rebind(vu)
-	}
 	{ // Tests BoundMapping.Set when the underlying set can not be performed.
 		type A struct {
 			I int

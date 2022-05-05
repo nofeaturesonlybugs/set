@@ -119,7 +119,7 @@ func (p PreparedMapping) Err() error {
 	return p.err
 }
 
-// Field returns the *Value for the next field.
+// Field returns the Value for the next field.
 //
 // Each call to Field advances the internal access pointer in order to traverse the
 // fields in the same order as the last call to Plan.
@@ -127,13 +127,13 @@ func (p PreparedMapping) Err() error {
 // ErrPlanInvalid is returned if Plan has not been called.  If this call to Field
 // exceeds the length of the plan then ErrPlanExceeded is returned.  Other
 // errors from this package or standard library may also be returned.
-func (p *PreparedMapping) Field() (*Value, error) {
+func (p *PreparedMapping) Field() (Value, error) {
 	if !p.valid {
-		return nil, p.err.(pkgerr).WithCallSite("PreparedMapping.Field")
+		return zeroV, p.err.(pkgerr).WithCallSite("PreparedMapping.Field")
 	}
 	//
 	if err := p.next(); err != nil {
-		return nil, err.(pkgerr).WithCallSite("PreparedMapping.Field")
+		return zeroV, err.(pkgerr).WithCallSite("PreparedMapping.Field")
 	}
 	//
 	step := p.plan[p.k]
@@ -414,7 +414,7 @@ func (p *PreparedMapping) Set(value interface{}) error {
 	}
 	//
 	// If the type-switch above didn't hit then we'll coerce the
-	// fieldValue to a *Value and use our swiss-army knife Value.To().
+	// fieldValue to a Value and use our swiss-army knife Value.To().
 	err = V(v).To(value)
 	if err != nil {
 		err = pkgerr{
