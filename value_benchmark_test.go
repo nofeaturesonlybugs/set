@@ -62,7 +62,7 @@ func BenchmarkScalarTo(b *testing.B) {
 	type U uint
 	type S string
 
-	Benchit := func(b *testing.B, v *set.Value) {
+	Benchit := func(b *testing.B, v set.Value) {
 		for n := 0; n < b.N; n++ {
 			v.To(true)
 			v.To(false)

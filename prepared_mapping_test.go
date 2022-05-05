@@ -290,7 +290,7 @@ func TestPreparedMapping_Field(t *testing.T) {
 	var a, b S
 	var m, n Nested
 
-	var v *set.Value
+	var v set.Value
 	var p set.PreparedMapping
 	var err error
 
@@ -311,7 +311,7 @@ func TestPreparedMapping_Field(t *testing.T) {
 		v, err = p.Field()
 		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
-		chk.Nil(v)
+		chk.False(v.TopValue.IsValid())
 
 		p.Rebind(&b)
 		chk.Nil(p.Err())
@@ -324,7 +324,7 @@ func TestPreparedMapping_Field(t *testing.T) {
 		v, err = p.Field()
 		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
-		chk.Nil(v)
+		chk.False(v.TopValue.IsValid())
 
 		chk.Equal("First", a.A)
 		chk.Equal(42, a.B)

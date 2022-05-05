@@ -7,6 +7,9 @@ import (
 	"github.com/nofeaturesonlybugs/set/coerce"
 )
 
+// zeroV is created once and returned whenever an empty or invalid Value is needed.
+var zeroV = V(nil)
+
 // V returns a new Value.
 //
 // Memory is possibly created when calling this function:
@@ -22,44 +25,44 @@ import (
 //	// Memory is created because the local variable is an unallocated pointer AND we pass its address.
 //	var *bp bool
 //	v := set.V(&bp) // bp now contains allocated memory.
-func V(arg interface{}) *Value {
-	rv := &Value{}
-	rv.original = arg
+func V(arg interface{}) Value {
+	var v Value
+	v.original = arg
 	//
 	if arg == nil {
-		rv.err = pkgerr{
+		v.err = pkgerr{
 			Err:     ErrUnsupported,
 			Context: "nil value",
 			Hint:    "set.V(nil) was called",
 		}
-		return rv
+		return v
 	}
 	//
-	var v reflect.Value
+	var V reflect.Value
 	switch tt := arg.(type) {
 	case reflect.Value:
-		v = tt
+		V = tt
 	default:
-		v = reflect.ValueOf(arg)
+		V = reflect.ValueOf(arg)
 	}
-	if v.IsValid() {
-		rv.TypeInfo = TypeCache.StatType(v.Type())
+	if V.IsValid() {
+		v.TypeInfo = TypeCache.StatType(V.Type())
 	}
-	rv.WriteValue, rv.CanWrite = Writable(v)
-	rv.TopValue = v
+	v.WriteValue, v.CanWrite = Writable(V)
+	v.TopValue = V
 
-	if rv.IsMap || rv.IsSlice {
-		rv.ElemTypeInfo = TypeCache.StatType(rv.ElemType)
+	if v.IsMap || v.IsSlice {
+		v.ElemTypeInfo = TypeCache.StatType(v.ElemType)
 	}
 
-	if !rv.CanWrite {
-		rv.err = pkgerr{
+	if !v.CanWrite {
+		v.err = pkgerr{
 			Err:     ErrReadOnly,
-			Context: rv.Type.String() + " is not writable",
-			Hint:    "call to set.V(" + rv.Type.String() + ") should have been set.V(*" + rv.Type.String() + ")",
+			Context: v.Type.String() + " is not writable",
+			Hint:    "call to set.V(" + v.Type.String() + ") should have been set.V(*" + v.Type.String() + ")",
 		}
 	}
-	return rv
+	return v
 }
 
 // Value wraps around a Go variable and performs magic.
@@ -68,7 +71,7 @@ type Value struct {
 	// this TypeInfo will describe the final type at the end of the pointer chain.
 	//
 	// To conserve memory and maintain speed this TypeInfo object may be shared with
-	// other *Value instances.  Altering the members within TypeInfo will most likely
+	// other Value instances.  Altering the members within TypeInfo will most likely
 	// crash your program with a panic.
 	//
 	// Treat this value as read only.
@@ -80,7 +83,7 @@ type Value struct {
 	// TopValue is the original value passed to V() but wrapped in a reflect.Value.
 	TopValue reflect.Value
 
-	// WriteValue is a reflect.Value representing the modifiable value wrapped within this *Value.
+	// WriteValue is a reflect.Value representing the modifiable value wrapped within this Value.
 	//
 	// If you call V( &t ) then CanWrite will be true and WriteValue will be a usable reflect.Value.
 	// If you call V( t ) where t is not a pointer or does not point to allocated memory then
@@ -102,60 +105,60 @@ type Value struct {
 // item can be type-coerced into the slice's data type.  Either all items are appended without an error
 // or no items are appended and an error is returned describing the type of the item that could not
 // be appended.
-func (me *Value) Append(items ...interface{}) error {
-	if me.err != nil {
-		return me.err.(pkgerr).WithCallSite("Value.Append")
-	} else if me.Kind != reflect.Slice {
-		return pkgerr{Err: ErrUnsupported, CallSite: "Value.Append", Context: "can not append to " + me.Type.String()}
+func (v Value) Append(items ...interface{}) error {
+	if v.err != nil {
+		return v.err.(pkgerr).WithCallSite("Value.Append")
+	} else if v.Kind != reflect.Slice {
+		return pkgerr{Err: ErrUnsupported, CallSite: "Value.Append", Context: "can not append to " + v.Type.String()}
 	}
 	//
-	zero := reflect.Zero(me.Type)
+	zero := reflect.Zero(v.Type)
 	for _, item := range items {
-		elem := reflect.New(me.ElemType)
+		elem := reflect.New(v.ElemType)
 		elemAsValue := V(elem)
 		if err := elemAsValue.To(item); err != nil {
 			return err
 		}
 		zero = reflect.Append(zero, reflect.Indirect(elemAsValue.TopValue))
 	}
-	me.WriteValue.Set(reflect.AppendSlice(me.WriteValue, zero))
+	v.WriteValue.Set(reflect.AppendSlice(v.WriteValue, zero))
 	//
 	return nil
 }
 
-// Copy creates a clone of the *Value and its internal members.
+// Copy creates a clone of the Value and its internal members.
 //
-// If you need to create many *Value for a type T in order to Rebind(T) in a goroutine
+// If you need to create many Value for a type T in order to Rebind(T) in a goroutine
 // architecture then consider creating and caching a V(T) early in your application
 // and then calling Copy() on that cached copy before using Rebind().
-func (me *Value) Copy() *Value {
-	rv := &Value{
-		TypeInfo:     me.TypeInfo,
-		CanWrite:     me.CanWrite,
-		TopValue:     me.TopValue,
-		WriteValue:   me.WriteValue,
-		ElemTypeInfo: me.ElemTypeInfo,
-		original:     me.original,
-		err:          me.err,
+func (v Value) Copy() Value {
+	cp := Value{
+		TypeInfo:     v.TypeInfo,
+		CanWrite:     v.CanWrite,
+		TopValue:     v.TopValue,
+		WriteValue:   v.WriteValue,
+		ElemTypeInfo: v.ElemTypeInfo,
+		original:     v.original,
+		err:          v.err,
 	}
-	return rv
+	return cp
 }
 
 // Fields returns a slice of Field structs when Value is wrapped around a struct; for all other values
 // nil is returned.
 //
-// This function has some overhead because it creates a new *Value for each struct field.  If you only need
+// This function has some overhead because it creates a new Value for each struct field.  If you only need
 // the reflect.StructField information consider using the public StructFields member.
-func (me *Value) Fields() []Field {
-	if me == nil || me.Kind != reflect.Struct {
+func (v Value) Fields() []Field {
+	if v.Kind != reflect.Struct {
 		return nil
 	}
-	var rv []Field
-	for k, max := 0, me.Type.NumField(); k < max; k++ {
-		v, f := me.WriteValue.Field(k), me.Type.Field(k)
-		rv = append(rv, Field{Value: V(v), Field: f})
+	var fields []Field
+	for k, max := 0, v.Type.NumField(); k < max; k++ {
+		fV, fT := v.WriteValue.Field(k), v.Type.Field(k)
+		fields = append(fields, Field{Value: V(fV), Field: fT})
 	}
-	return rv
+	return fields
 }
 
 // FieldByIndex returns the nested field corresponding to index.
@@ -163,62 +166,62 @@ func (me *Value) Fields() []Field {
 // Key differences between this method and the built-in method on reflect.Value.FieldByIndex() are
 // the built-in causes panics while this one will return errors and this method will instantiate nil struct
 // members as it traverses.
-func (me *Value) FieldByIndex(index []int) (reflect.Value, error) {
-	var v reflect.Value
+func (v Value) FieldByIndex(index []int) (reflect.Value, error) {
+	var V reflect.Value
 	size := len(index)
-	if me.err != nil {
-		return v, me.err.(pkgerr).WithCallSite("Value.FieldByIndex")
+	if v.err != nil {
+		return V, v.err.(pkgerr).WithCallSite("Value.FieldByIndex")
 	} else if size == 0 {
-		return v, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: "empty index"}
+		return V, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: "empty index"}
 	}
-	v = me.WriteValue
+	V = v.WriteValue
 	for k := 0; k < size; k++ {
 		n := index[k] // n is the index (or field num) to consider
-		if v.Kind() != reflect.Struct {
-			return v, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("want struct but got %v", v.Type())}
-		} else if n > v.NumField()-1 {
-			return v, pkgerr{Err: ErrIndexOutOfBounds, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("index %v exceeds max %v", n, v.NumField()-1)}
+		if V.Kind() != reflect.Struct {
+			return V, pkgerr{Err: ErrUnsupported, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("want struct but got %v", V.Type())}
+		} else if n > V.NumField()-1 {
+			return V, pkgerr{Err: ErrIndexOutOfBounds, CallSite: "Value.FieldByIndex", Context: fmt.Sprintf("index %v exceeds max %v", n, V.NumField()-1)}
 		}
-		v = v.Field(n)
-		t, k := v.Type(), v.Kind()
+		V = V.Field(n)
+		T, K := V.Type(), V.Kind()
 		// Instantiate nil pointer chains.
-		if k == reflect.Ptr {
-			for k == reflect.Ptr {
-				if v.IsNil() && v.CanSet() {
-					ptr := reflect.New(t.Elem())
-					v.Set(ptr)
-					v = ptr
+		if K == reflect.Ptr {
+			for K == reflect.Ptr {
+				if V.IsNil() && V.CanSet() {
+					ptr := reflect.New(T.Elem())
+					V.Set(ptr)
+					V = ptr
 				}
-				v = v.Elem()
-				t, k = v.Type(), v.Kind()
+				V = V.Elem()
+				T, K = V.Type(), V.Kind()
 			}
 		}
 	}
-	return v, nil
+	return V, nil
 }
 
 // FieldByIndexAsValue calls into FieldByIndex and if there is no error the resulting reflect.Value is
-// wrapped within a call to V() to return a *Value.
-func (me *Value) FieldByIndexAsValue(index []int) (*Value, error) {
-	var v reflect.Value
+// wrapped within a call to V() to return a Value.
+func (v Value) FieldByIndexAsValue(index []int) (Value, error) {
+	var RV reflect.Value
 	var err error
-	if v, err = me.FieldByIndex(index); err != nil {
-		return nil, err
+	if RV, err = v.FieldByIndex(index); err != nil {
+		return zeroV, err
 	}
-	return V(v), nil
+	return V(RV), nil
 }
 
 // FieldsByTag is the same as Fields() except only Fields with the given struct-tag are returned and the
 // TagValue member of Field will be set to the tag's value.
-func (me *Value) FieldsByTag(key string) []Field {
-	var rv []Field
-	for _, f := range me.Fields() {
+func (v Value) FieldsByTag(key string) []Field {
+	var fields []Field
+	for _, f := range v.Fields() {
 		if value, ok := f.Field.Tag.Lookup(key); ok {
 			f.TagValue = value
-			rv = append(rv, f)
+			fields = append(fields, f)
 		}
 	}
-	return rv
+	return fields
 }
 
 // fill is the underlying function that powers Fill() and FillByTag().
@@ -228,7 +231,7 @@ func (me *Value) FieldsByTag(key string) []Field {
 // Fill() and FillByTag() have essentially the same complicated logic except where they get the string/key to pass
 // to getter() and how they sub-fill nested structures.  The keyFunc and fillFunc arguments allow them to
 // cascade the appropriate logic into this function.
-func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string, fillFunc func(*Value, Getter) error) error {
+func (v Value) fill(getter Getter, fields []Field, keyFunc func(Field) string, fillFunc func(Value, Getter) error) error {
 	var err error
 	for _, field := range fields {
 		getName := keyFunc(field)
@@ -291,30 +294,30 @@ func (me *Value) fill(getter Getter, fields []Field, keyFunc func(Field) string,
 
 // Fill iterates a struct's fields and calls To() on each one by passing the field name to the Getter.
 // Fill stops and returns on the first error encountered.
-func (me *Value) Fill(getter Getter) error {
-	fields := me.Fields()
+func (v Value) Fill(getter Getter) error {
+	fields := v.Fields()
 	keyFunc := func(field Field) string {
 		return field.Field.Name
 	}
-	fillFunc := func(value *Value, getter Getter) error {
+	fillFunc := func(value Value, getter Getter) error {
 		return value.Fill(getter)
 	}
-	return me.fill(getter, fields, keyFunc, fillFunc)
+	return v.fill(getter, fields, keyFunc, fillFunc)
 }
 
 // FillByTag is the same as Fill() except the argument passed to Getter is the value of the struct-tag.
-func (me *Value) FillByTag(key string, getter Getter) error {
-	fields := me.FieldsByTag(key)
+func (v Value) FillByTag(key string, getter Getter) error {
+	fields := v.FieldsByTag(key)
 	keyFunc := func(field Field) string {
 		return field.TagValue
 	}
-	fillFunc := func(value *Value, getter Getter) error {
+	fillFunc := func(value Value, getter Getter) error {
 		return value.FillByTag(key, getter)
 	}
-	return me.fill(getter, fields, keyFunc, fillFunc)
+	return v.fill(getter, fields, keyFunc, fillFunc)
 }
 
-// Rebind will swap the underlying original value used to create *Value with the incoming
+// Rebind will swap the underlying original value used to create Value with the incoming
 // value if:
 //	Type(Original) == Type(Incoming).
 //
@@ -327,57 +330,56 @@ func (me *Value) FillByTag(key string, getter Getter) error {
 //	var slice []T
 //	// populate slice
 //	for _, item := range slice {
-//		v := set.V( item ) // Creates new *Value every iteration -- can be expensive!
+//		v := set.V( item ) // Creates new Value every iteration -- can be expensive!
 //		// manipulate v in order to affect item
 //	}
 // to:
 //	var slice []T
-//	v := set.V( T{} ) // Create a single *Value for the type T
+//	v := set.V( T{} ) // Create a single Value for the type T
 //	// populate slice
 //	for _, item := range slice {
-//		v.Rebind( item ) // Reuse the existing *Value -- will be faster!
+//		v.Rebind( item ) // Reuse the existing Value -- will be faster!
 //		// manipulate v in order to affect item
 //	}
 //
-func (me *Value) Rebind(arg interface{}) {
-	var v reflect.Value
+func (v *Value) Rebind(arg interface{}) {
+	var V reflect.Value
 	switch tt := arg.(type) {
 	case reflect.Value:
-		v = tt
-	case *Value:
-		v = tt.TopValue
+		V = tt
+	case Value:
+		V = tt.TopValue
 	default:
-		v = reflect.ValueOf(arg)
+		V = reflect.ValueOf(arg)
 	}
-	if me.TopValue.Type() != v.Type() {
-		// panic(fmt.Sprintf("Rebind expects same underlying type: original %T not compatible with incoming %T", me.WriteValue.Interface(), arg)) // TODO RM
-		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", me.original, arg))
+	if v.TopValue.Type() != V.Type() {
+		panic(fmt.Sprintf("mismatching types during Rebind; have %T and got %T", v.original, arg))
 	}
-	me.original, me.TopValue = arg, v
-	me.WriteValue, me.CanWrite = Writable(v)
+	v.original, v.TopValue = arg, V
+	v.WriteValue, v.CanWrite = Writable(V)
 }
 
 // Zero sets the Value to the Zero value of the appropriate type.
-func (me *Value) Zero() error {
-	if me.err != nil {
-		return me.err.(pkgerr).WithCallSite("Value.Zero")
+func (v Value) Zero() error {
+	if v.err != nil {
+		return v.err.(pkgerr).WithCallSite("Value.Zero")
 	}
-	me.WriteValue.Set(reflect.Zero(me.Type))
+	v.WriteValue.Set(reflect.Zero(v.Type))
 	return nil
 }
 
-// NewElem instantiates and returns a *Value that can be Panics.Append()'ed to this type; only valid
+// NewElem instantiates and returns a Value that can be Panics.Append()'ed to this type; only valid
 // if Value.ElemType describes a valid type.
-func (me *Value) NewElem() (*Value, error) {
-	if me.ElemTypeInfo.Kind == reflect.Invalid {
-		return nil, pkgerr{Err: ErrUnsupported, CallSite: "Value.NewElem", Context: fmt.Sprintf("%T is not an element container", me.original)}
+func (v Value) NewElem() (Value, error) {
+	if v.ElemTypeInfo.Kind == reflect.Invalid {
+		return zeroV, pkgerr{Err: ErrUnsupported, CallSite: "Value.NewElem", Context: fmt.Sprintf("%T is not an element container", v.original)}
 	}
-	return V(reflect.New(me.ElemType)), nil
+	return V(reflect.New(v.ElemType)), nil
 }
 
 // To attempts to assign the argument into Value.
 //
-// If *Value is wrapped around an unwritable reflect.Value or the type is reflect.Invalid an
+// If Value is wrapped around an unwritable reflect.Value or the type is reflect.Invalid an
 // error will be returned.  You probably forgot to call set.V() with an address to your type.
 //
 // If the assignment can not be made but the wrapped value is writable then the wrapped
@@ -401,104 +403,104 @@ func (me *Value) NewElem() (*Value, error) {
 //		-> Note: T != S; they are now different slices; changes to T do not affect S and vice versa.
 //		-> Note: If the elements themselves are pointers then, for example, T[0] and S[0] point
 //			at the same memory and will see changes to whatever is pointed at.
-func (me *Value) To(arg interface{}) error {
-	if me.err != nil {
-		return me.err.(pkgerr).WithCallSite("Value.To")
+func (v Value) To(arg interface{}) error {
+	if v.err != nil {
+		return v.err.(pkgerr).WithCallSite("Value.To")
 	} else if arg == nil {
-		return me.Zero()
+		return v.Zero()
 	}
 	//
 	// This typeswitch handles the case where we are a scalar.
-	// TODO Possibly benchmark switching on reflect.Kind vs type switching on me.original
-	switch me.Kind {
+	switch v.Kind {
 	case reflect.Bool:
 		c, err := coerce.Bool(arg)
-		me.WriteValue.SetBool(c)
+		v.WriteValue.SetBool(c)
 		return err
 	case reflect.Float32:
 		c, err := coerce.Float32(arg)
-		me.WriteValue.SetFloat(float64(c))
+		v.WriteValue.SetFloat(float64(c))
 		return err
 	case reflect.Float64:
 		c, err := coerce.Float64(arg)
-		me.WriteValue.SetFloat(c)
+		v.WriteValue.SetFloat(c)
 		return err
 	case reflect.Int:
 		c, err := coerce.Int(arg)
-		me.WriteValue.SetInt(int64(c))
+		v.WriteValue.SetInt(int64(c))
 		return err
 	case reflect.Int8:
 		c, err := coerce.Int8(arg)
-		me.WriteValue.SetInt(int64(c))
+		v.WriteValue.SetInt(int64(c))
 		return err
 	case reflect.Int16:
 		c, err := coerce.Int16(arg)
-		me.WriteValue.SetInt(int64(c))
+		v.WriteValue.SetInt(int64(c))
 		return err
 	case reflect.Int32:
 		c, err := coerce.Int32(arg)
-		me.WriteValue.SetInt(int64(c))
+		v.WriteValue.SetInt(int64(c))
 		return err
 	case reflect.Int64:
 		c, err := coerce.Int64(arg)
-		me.WriteValue.SetInt(int64(c))
+		v.WriteValue.SetInt(int64(c))
 		return err
 	case reflect.Uint:
 		c, err := coerce.Uint(arg)
-		me.WriteValue.SetUint(uint64(c))
+		v.WriteValue.SetUint(uint64(c))
 		return err
 	case reflect.Uint8:
 		c, err := coerce.Uint8(arg)
-		me.WriteValue.SetUint(uint64(c))
+		v.WriteValue.SetUint(uint64(c))
 		return err
 	case reflect.Uint16:
 		c, err := coerce.Uint16(arg)
-		me.WriteValue.SetUint(uint64(c))
+		v.WriteValue.SetUint(uint64(c))
 		return err
 	case reflect.Uint32:
 		c, err := coerce.Uint32(arg)
-		me.WriteValue.SetUint(uint64(c))
+		v.WriteValue.SetUint(uint64(c))
 		return err
 	case reflect.Uint64:
 		c, err := coerce.Uint64(arg)
-		me.WriteValue.SetUint(uint64(c))
+		v.WriteValue.SetUint(uint64(c))
 		return err
 	case reflect.String:
 		c, err := coerce.String(arg)
-		me.WriteValue.SetString(c)
+		v.WriteValue.SetString(c)
 		return err
 	}
 	//
+	// TODO Code below here could be optimized better.
 	rv := reflect.ValueOf(arg)
 	for {
 		//
 		// If arg is any kind of pointer dereference to final value or nil
 		for ; rv.Kind() == reflect.Ptr; rv = rv.Elem() {
 			if rv.IsNil() {
-				return me.Zero()
+				return v.Zero()
 			}
 		}
 		T := rv.Type()
 		//
-		if (T == me.Type || T.AssignableTo(me.Type)) && me.Kind != reflect.Slice {
+		if (T == v.Type || T.AssignableTo(v.Type)) && v.Kind != reflect.Slice {
 			// NB  We checked that me.Kind is not a slice because this package always makes a copy of a slice!
-			me.WriteValue.Set(rv)
+			v.WriteValue.Set(rv)
 			return nil
 		}
 		//
-		if me.IsSlice {
-			me.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
+		if v.IsSlice {
+			_ = v.Zero() // Zero only returns errors on nil receiver, invalid kind, or !CanWrite -- which are already checked above.
 			if rv.Kind() != reflect.Slice {
 				arg = []interface{}{arg}
 			}
 			slice := reflect.ValueOf(arg)
 			for k, size := 0, slice.Len(); k < size; k++ {
-				elem := V(reflect.New(me.ElemType).Interface())
+				elem := V(reflect.New(v.ElemType))
 				if err := elem.To(slice.Index(k).Interface()); err != nil {
-					me.Zero()
+					_ = v.Zero()
 					return err
 				}
-				me.WriteValue.Set(reflect.Append(me.WriteValue, elem.WriteValue))
+				v.WriteValue.Set(reflect.Append(v.WriteValue, elem.WriteValue))
 			}
 			return nil
 		} else if rv.Kind() == reflect.Slice {
@@ -507,8 +509,8 @@ func (me *Value) To(arg interface{}) error {
 				rv = rv.Index(n - 1)
 				continue
 			}
-			return me.Zero()
+			return v.Zero()
 		}
-		return me.Zero()
+		return v.Zero()
 	}
 }

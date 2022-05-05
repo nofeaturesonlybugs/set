@@ -48,7 +48,7 @@ func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 	c.ReuseRecord = true // From this point forward the csv reader can reuse the slice.
 	//
 	// Create a BoundMapping for element's type.
-	b, err := m.Bind(slice.Elem().Interface())
+	b, err := m.Bind(slice.Elem())
 	if err != nil {
 		return err
 	}

@@ -93,7 +93,7 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 					for _, field := range fieldNames {
 						v, err := b.Field(field)
 						chk.ErrorIs(err, set.ErrReadOnly, describe)
-						chk.Nil(v, describe)
+						chk.False(v.TopValue.IsValid(), describe)
 					}
 					//
 					values, err := b.Fields(fieldNames, nil)
@@ -129,7 +129,7 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 					for range fieldNames {
 						v, err := p.Field()
 						chk.ErrorIs(err, set.ErrReadOnly, describe)
-						chk.Nil(v, describe)
+						chk.False(v.TopValue.IsValid(), describe)
 					}
 					//
 					values, err := p.Fields(nil)
@@ -209,7 +209,7 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 					for range fieldNames {
 						v, err := p.Field()
 						chk.ErrorIs(err, set.ErrNoPlan, describe)
-						chk.Nil(v, describe)
+						chk.False(v.TopValue.IsValid(), describe)
 					}
 					//
 					values, err := p.Fields(nil)

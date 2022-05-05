@@ -3,6 +3,7 @@ package set_test
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -228,6 +229,38 @@ func ExampleMapper_Bind_elevatedEmbed() {
 	// Output: 42 3.14 3
 }
 
+func ExampleMapper_Bind_reflectValue() {
+	// As a convenience Mapper.Bind will accept a reflect.Value to perform the binding.
+	type S struct {
+		Num int
+		Str string
+	}
+	var s, t, u S
+
+	// Create a mapper.
+	m := &set.Mapper{}
+	b, _ := m.Bind(reflect.ValueOf(&s)) // err ignored for brevity
+
+	b.Set("Str", 3.14)
+	b.Set("Num", "42")
+
+	b.Rebind(reflect.ValueOf(&t))
+	b.Set("Str", -3.14)
+	b.Set("Num", "24")
+
+	// Even though the BoundMapping was created with reflect.Value it will still accept *S directly.
+	b.Rebind(&u)
+	b.Set("Str", "Works!")
+	b.Set("Num", uint(100))
+
+	fmt.Println("s", s.Num, s.Str)
+	fmt.Println("t", t.Num, t.Str)
+	fmt.Println("u", u.Num, u.Str)
+	// Output: s 42 3.14
+	// t 24 -3.14
+	// u 100 Works!
+}
+
 func ExampleMapper_Prepare() {
 	// This example demonstrats a simple flat struct of primitives.
 	type S struct {
@@ -339,4 +372,37 @@ func ExampleMapper_Prepare_elevatedEmbed() {
 
 	fmt.Println(s.Num, s.Str, s.V)
 	// Output: 42 3.14 3
+}
+
+func ExampleMapper_Prepare_reflectValue() {
+	// As a convenience Mapper.Prepare will accept a reflect.Value to perform the binding.
+	type S struct {
+		Num int
+		Str string
+	}
+	var s, t, u S
+
+	// Create a mapper.
+	m := &set.Mapper{}
+	p, _ := m.Prepare(reflect.ValueOf(&s)) // err ignored for brevity
+	_ = p.Plan("Str", "Num")               // err ignored for brevity
+
+	p.Set(3.14)
+	p.Set("42")
+
+	p.Rebind(reflect.ValueOf(&t))
+	p.Set(-3.14)
+	p.Set("24")
+
+	// Even though the PreparedMapping was created with reflect.Value it will still accept *S directly.
+	p.Rebind(&u)
+	p.Set("Works!")
+	p.Set(uint(100))
+
+	fmt.Println("s", s.Num, s.Str)
+	fmt.Println("t", t.Num, t.Str)
+	fmt.Println("u", u.Num, u.Str)
+	// Output: s 42 3.14
+	// t 24 -3.14
+	// u 100 Works!
 }

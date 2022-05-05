@@ -53,7 +53,6 @@ func Slice(v interface{}) (SliceValue, error) {
 	for pv.Kind() == reflect.Ptr {
 		// Update our pointer reference each iteration.  We want our ptr reference
 		// to be the **last** pointer in the chain such that slicePtr.ptr.Elem() is the []T.
-		// slicePtr.ptr = pv // TODO RM
 		//
 		if pv.IsNil() {
 			if !pv.CanSet() {

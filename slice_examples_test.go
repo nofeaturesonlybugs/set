@@ -8,7 +8,7 @@ import (
 )
 
 func ExampleSlice() {
-	var v *set.Value
+	var v set.Value
 	var nums []int
 	var numsppp ***[]int
 
