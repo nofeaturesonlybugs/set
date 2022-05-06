@@ -12,19 +12,7 @@ var zeroV = V(nil)
 
 // V returns a new Value.
 //
-// Memory is possibly created when calling this function:
-//	// No memory is created because b is a local variable and we pass its address.
-//	var b bool
-//	v := set.V(&b)
-//
-//	// No memory is created because bp points at an existing local variable and we pass the pointer bp.
-//	var b bool
-//	bp := &b
-//	v := set.V(bp)
-//
-//	// Memory is created because the local variable is an unallocated pointer AND we pass its address.
-//	var *bp bool
-//	v := set.V(&bp) // bp now contains allocated memory.
+// The returned Value must not be copied except via its Copy method.
 func V(arg interface{}) Value {
 	var v Value
 	v.original = arg
@@ -66,6 +54,8 @@ func V(arg interface{}) Value {
 }
 
 // Value wraps around a Go variable and performs magic.
+//
+// Once created a Value should only be copied via its Copy method.
 type Value struct {
 	// TypeInfo describes the type T in WriteValue.  When the value is created with a pointer P
 	// this TypeInfo will describe the final type at the end of the pointer chain.
