@@ -59,6 +59,19 @@
             Changing the Mapper.Bind signature allows this checking to be performed when
             a BoundMapping is being created and lessens the burden on BoundMapping methods from
             performing this check and returning the proper error.
+
+    + Breaking change (impact=low)
+        Value is now a value type and most methods use value receivers.
+        Migration steps:
+            Change *Value declarations to Value.
+            Use the Copy method to make copies if not already doing so.
+        Reason:
+            Migrating Value to a value type with value receivers reduces allocations and the
+            load on the garbage collector.
+            Internally the members of Value are either meta data that does not change or
+            reflect.Value types that also act as value types.  So there's no real need for Value
+            to exist as a pointer; the one exception being the Rebind method that mutates internal
+            members.
     
     + BoundMapping
         + Rebind allows argument to be reflect.Value if-and-only-if the value stored in the
