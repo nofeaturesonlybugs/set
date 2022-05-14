@@ -251,7 +251,13 @@ func (me *Mapper) Map(T interface{}) Mapping {
 			if _, ok := mapperTreatAsScalar[fieldTypeInfo.Type]; ok {
 				add(name, nameIndeces, field, paths.Leaves[fullpath+field.Name])
 			} else if _, ok = me.TreatAsScalar[fieldTypeInfo.Type]; ok {
-				add(name, nameIndeces, field, paths.Leaves[fullpath+field.Name])
+				// When the type is treated as scalar first search Branches and then Leaves
+				// for the associated path information.
+				if p, ok := paths.Branches[fullpath+field.Name]; ok {
+					add(name, nameIndeces, field, p)
+				} else if p, ok = paths.Leaves[fullpath+field.Name]; ok {
+					add(name, nameIndeces, field, p)
+				}
 			} else if fieldTypeInfo.IsStruct {
 				scan(fieldTypeInfo, nameIndeces, name, fullpath+field.Name)
 			} else if fieldTypeInfo.IsScalar {
