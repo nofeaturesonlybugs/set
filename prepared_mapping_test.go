@@ -304,10 +304,12 @@ func TestPreparedMapping_Field(t *testing.T) {
 
 		v, err = p.Field()
 		chk.NoError(err)
-		v.To("42")
+		err = v.To("42")
+		chk.NoError(err)
 		v, err = p.Field()
 		chk.NoError(err)
-		v.To("First")
+		err = v.To("First")
+		chk.NoError(err)
 		v, err = p.Field()
 		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
@@ -317,10 +319,12 @@ func TestPreparedMapping_Field(t *testing.T) {
 		chk.Nil(p.Err())
 		v, err = p.Field()
 		chk.NoError(err)
-		v.To("78")
+		err = v.To("78")
+		chk.NoError(err)
 		v, err = p.Field()
 		chk.NoError(err)
-		v.To("Second")
+		err = v.To("Second")
+		chk.NoError(err)
 		v, err = p.Field()
 		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
@@ -341,13 +345,17 @@ func TestPreparedMapping_Field(t *testing.T) {
 		chk.NoError(err)
 
 		v, _ = p.Field()
-		v.To(100)
+		err = v.To(100)
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To("m.Next.A")
+		err = v.To("m.Next.A")
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To("m.S.A")
+		err = v.To("m.S.A")
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To(10)
+		err = v.To(10)
+		chk.NoError(err)
 		v, err = p.Field()
 		chk.ErrorIs(err, set.ErrPlanOutOfBounds)
 		chk.ErrorIs(p.Err(), set.ErrPlanOutOfBounds)
@@ -355,13 +363,17 @@ func TestPreparedMapping_Field(t *testing.T) {
 		p.Rebind(&n)
 		chk.Nil(p.Err())
 		v, _ = p.Field()
-		v.To(900)
+		err = v.To(900)
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To("n.Next.A")
+		err = v.To("n.Next.A")
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To("n.S.A")
+		err = v.To("n.S.A")
+		chk.NoError(err)
 		v, _ = p.Field()
-		v.To(90)
+		err = v.To(90)
+		chk.NoError(err)
 		v, err = p.Field()
 
 		chk.Equal("m.S.A", m.S.A)
@@ -414,10 +426,6 @@ func TestPreparedMapping_Fields(t *testing.T) {
 	type Nested struct {
 		S
 		Next S
-	}
-	//
-	type Interfacer interface {
-		Interfacer()
 	}
 	type WithTime struct {
 		T time.Time

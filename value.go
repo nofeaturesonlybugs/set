@@ -242,7 +242,7 @@ func (v Value) fill(getter Getter, fields []Field, keyFunc func(Field) string, f
 				if err = fillFunc(elem, got); err != nil {
 					return err
 				}
-				field.Value.Append(elem.WriteValue.Interface()) // This can return an error but it _should_be_ impossible.
+				_ = field.Value.Append(elem.WriteValue.Interface()) // It is impossible for this to return an error here.
 			} else {
 				return pkgerr{Err: ErrUnsupported, CallSite: "Value.fill", Context: fmt.Sprintf("value is Getter but field %v is %v", getName, field.Value.Type)}
 			}
@@ -260,7 +260,7 @@ func (v Value) fill(getter Getter, fields []Field, keyFunc func(Field) string, f
 					if err = fillFunc(elem, elemGetter); err != nil {
 						return err
 					}
-					field.Value.Append(elem.WriteValue.Interface()) // This can return an error but it _should_be impossible.
+					_ = field.Value.Append(elem.WriteValue.Interface()) // It is impossible for this to return an error here.
 				}
 			} else if field.Value.IsStruct {
 				size := len(got)

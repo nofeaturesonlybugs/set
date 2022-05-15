@@ -116,13 +116,16 @@ func TestValue_rebind(t *testing.T) {
 	{
 		var a, b string
 		v := set.V(&a)
-		v.To("Hello")
+		err := v.To("Hello")
+		chk.NoError(err)
 		v.Rebind(reflect.ValueOf(&b))
-		v.To("Goodbye")
+		err = v.To("Goodbye")
+		chk.NoError(err)
 		chk.Equal("Hello", a)
 		chk.Equal("Goodbye", b)
 		v.Rebind(reflect.ValueOf(&a))
-		v.To("Hello x2")
+		err = v.To("Hello x2")
+		chk.NoError(err)
 		chk.Equal("Hello x2", a)
 	}
 }
@@ -593,49 +596,60 @@ func TestValue_setSliceToString(t *testing.T) {
 }
 func TestValue_setSliceCreatesCopies(t *testing.T) {
 	chk := assert.New(t)
+	// TODO Use table tests.
 	//
 	{
 		slice := []bool{true, true, true}
 		dest := []bool{}
-		set.V(&dest).To(slice)
-		chk.Equal(3, len(slice))
-		chk.Equal(3, len(dest))
+		err := set.V(&dest).To(slice)
+		chk.NoError(err)
+		chk.Len(slice, 3)
+		chk.Len(dest, 3)
+		chk.Equal(slice, dest)
 		dest[1] = false
 		chk.NotEqual(dest[1], slice[1])
 	}
 	{
 		slice := []float32{2, 4, 6}
 		dest := []float32{}
-		set.V(&dest).To(slice)
-		chk.Equal(3, len(slice))
-		chk.Equal(3, len(dest))
+		err := set.V(&dest).To(slice)
+		chk.NoError(err)
+		chk.Len(slice, 3)
+		chk.Len(dest, 3)
+		chk.Equal(slice, dest)
 		dest[1] = 42
 		chk.NotEqual(dest[1], slice[1])
 	}
 	{
 		slice := []int{2, 4, 6}
 		dest := []int{}
-		set.V(&dest).To(slice)
-		chk.Equal(3, len(slice))
-		chk.Equal(3, len(dest))
+		err := set.V(&dest).To(slice)
+		chk.NoError(err)
+		chk.Len(slice, 3)
+		chk.Len(dest, 3)
+		chk.Equal(slice, dest)
 		dest[1] = -4
 		chk.NotEqual(dest[1], slice[1])
 	}
 	{
 		slice := []uint{2, 4, 6}
 		dest := []uint{}
-		set.V(&dest).To(slice)
-		chk.Equal(3, len(slice))
-		chk.Equal(3, len(dest))
+		err := set.V(&dest).To(slice)
+		chk.NoError(err)
+		chk.Len(slice, 3)
+		chk.Len(dest, 3)
+		chk.Equal(slice, dest)
 		dest[1] = 42
 		chk.NotEqual(dest[1], slice[1])
 	}
 	{
 		slice := []string{"Hello", "World", "foo"}
 		dest := []string{}
-		set.V(&dest).To(slice)
-		chk.Equal(3, len(slice))
-		chk.Equal(3, len(dest))
+		err := set.V(&dest).To(slice)
+		chk.NoError(err)
+		chk.Len(slice, 3)
+		chk.Len(dest, 3)
+		chk.Equal(slice, dest)
 		dest[1] = "bar"
 		chk.NotEqual(dest[1], slice[1])
 	}
@@ -1538,13 +1552,6 @@ func TestValue_fieldByIndex(t *testing.T) {
 		B **Bar
 	}
 	//
-	type IndexValue struct {
-		Index       []int
-		Value       interface{}
-		Expect      interface{}
-		IndexError  error
-		AssignError error
-	}
 	type FieldByIndexTest struct {
 		Name       string
 		Dest       interface{}
@@ -1648,10 +1655,6 @@ func TestValue_fieldByIndexCoverageErrors(t *testing.T) {
 	var value, field set.Value
 	type A struct {
 		A string
-	}
-	type B struct {
-		B string
-		A
 	}
 	var a A
 

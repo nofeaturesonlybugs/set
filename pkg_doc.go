@@ -88,4 +88,13 @@
 // being worked on with a new incoming value without regathering reflect meta data.  When
 // used appropriately with Rebind the BoundMapping, PreparedMapping, and Value types become
 // much more performant.
+//
+// A Note About Package Examples
+//
+// Several examples ignore errors for brevity:
+//	_ = p.Plan(...) // error ignored for brevity
+//	_ = b.Set(...) // error ignored for brevity
+//
+// This is a conscious decision because error checking is not the point of the examples.  However
+// in production code you should check errors appropriately.
 package set

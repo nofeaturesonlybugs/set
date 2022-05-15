@@ -140,8 +140,9 @@ func ExampleMapper_Bind() {
 	m := &set.Mapper{}
 	b, _ := m.Bind(&s) // err ignored for brevity
 
-	b.Set("Str", 3.14) // 3.14 coerced to "3.14"
-	b.Set("Num", "42") // "42" coerced to 42
+	// b.Set errors ignored for brevity
+	_ = b.Set("Str", 3.14) // 3.14 coerced to "3.14"
+	_ = b.Set("Num", "42") // "42" coerced to 42
 
 	fmt.Println(s.Num, s.Str)
 	// Output: 42 3.14
@@ -165,9 +166,10 @@ func ExampleMapper_Bind_nesting() {
 	}
 	b, _ := m.Bind(&s) // err ignored for brevity
 
-	b.Set("Str", 3.14)   // 3.14 coerced to "3.14"
-	b.Set("Num", "42")   // "42" coerced to 42
-	b.Set("Foo.V", 3.14) // 3.14 coerced to 3
+	// b.Set errors ignored for brevity
+	_ = b.Set("Str", 3.14)   // 3.14 coerced to "3.14"
+	_ = b.Set("Num", "42")   // "42" coerced to 42
+	_ = b.Set("Foo.V", 3.14) // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.Foo.V)
 	// Output: 42 3.14 3
@@ -193,9 +195,10 @@ func ExampleMapper_Bind_embedded() {
 	}
 	b, _ := m.Bind(&s) // err ignored for brevity
 
-	b.Set("Str", 3.14)     // 3.14 coerced to "3.14"
-	b.Set("Num", "42")     // "42" coerced to 42
-	b.Set("Embed.V", 3.14) // 3.14 coerced to 3
+	// b.Set errors ignored for brevity
+	_ = b.Set("Str", 3.14)     // 3.14 coerced to "3.14"
+	_ = b.Set("Num", "42")     // "42" coerced to 42
+	_ = b.Set("Embed.V", 3.14) // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.V)
 	// Output: 42 3.14 3
@@ -221,9 +224,10 @@ func ExampleMapper_Bind_elevatedEmbed() {
 	}
 	b, _ := m.Bind(&s) // err ignored for brevity
 
-	b.Set("Str", 3.14) // 3.14 coerced to "3.14"
-	b.Set("Num", "42") // "42" coerced to 42
-	b.Set("V", 3.14)   // 3.14 coerced to 3
+	// b.Set errors ignored for brevity
+	_ = b.Set("Str", 3.14) // 3.14 coerced to "3.14"
+	_ = b.Set("Num", "42") // "42" coerced to 42
+	_ = b.Set("V", 3.14)   // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.V)
 	// Output: 42 3.14 3
@@ -241,17 +245,18 @@ func ExampleMapper_Bind_reflectValue() {
 	m := &set.Mapper{}
 	b, _ := m.Bind(reflect.ValueOf(&s)) // err ignored for brevity
 
-	b.Set("Str", 3.14)
-	b.Set("Num", "42")
+	// b.Set errors ignored for brevity
+	_ = b.Set("Str", 3.14)
+	_ = b.Set("Num", "42")
 
 	b.Rebind(reflect.ValueOf(&t))
-	b.Set("Str", -3.14)
-	b.Set("Num", "24")
+	_ = b.Set("Str", -3.14)
+	_ = b.Set("Num", "24")
 
 	// Even though the BoundMapping was created with reflect.Value it will still accept *S directly.
 	b.Rebind(&u)
-	b.Set("Str", "Works!")
-	b.Set("Num", uint(100))
+	_ = b.Set("Str", "Works!")
+	_ = b.Set("Num", uint(100))
 
 	fmt.Println("s", s.Num, s.Str)
 	fmt.Println("t", t.Num, t.Str)
@@ -276,8 +281,8 @@ func ExampleMapper_Prepare() {
 	// PreparedBindings require a call to Plan indicating field order.
 	_ = p.Plan("Str", "Num") // err ignored for brevity
 
-	p.Set(3.14) // 3.14 coerced to "3.14"
-	p.Set("42") // "42" coerced to 42
+	_ = p.Set(3.14) // 3.14 coerced to "3.14"
+	_ = p.Set("42") // "42" coerced to 42
 
 	fmt.Println(s.Num, s.Str)
 	// Output: 42 3.14
@@ -304,9 +309,9 @@ func ExampleMapper_Prepare_nesting() {
 	// PreparedBindings require a call to Plan indicating field order.
 	_ = p.Plan("Str", "Num", "Foo.V") // err ignored for brevity
 
-	p.Set(3.14) // 3.14 coerced to "3.14"
-	p.Set("42") // "42" coerced to 42
-	p.Set(3.14) // 3.14 coerced to 3
+	_ = p.Set(3.14) // 3.14 coerced to "3.14"
+	_ = p.Set("42") // "42" coerced to 42
+	_ = p.Set(3.14) // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.Foo.V)
 	// Output: 42 3.14 3
@@ -335,9 +340,9 @@ func ExampleMapper_Prepare_embedded() {
 	// PreparedBindings require a call to Plan indicating field order.
 	_ = p.Plan("Str", "Num", "Embed.V") // err ignored for brevity
 
-	p.Set(3.14) // 3.14 coerced to "3.14"
-	p.Set("42") // "42" coerced to 42
-	p.Set(3.14) // 3.14 coerced to 3
+	_ = p.Set(3.14) // 3.14 coerced to "3.14"
+	_ = p.Set("42") // "42" coerced to 42
+	_ = p.Set(3.14) // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.V)
 	// Output: 42 3.14 3
@@ -366,9 +371,9 @@ func ExampleMapper_Prepare_elevatedEmbed() {
 	// PreparedBindings require a call to Plan indicating field order.
 	_ = p.Plan("Str", "Num", "V") // err ignored for brevity
 
-	p.Set(3.14) // 3.14 coerced to "3.14"
-	p.Set("42") // "42" coerced to 42
-	p.Set(3.14) // 3.14 coerced to 3
+	_ = p.Set(3.14) // 3.14 coerced to "3.14"
+	_ = p.Set("42") // "42" coerced to 42
+	_ = p.Set(3.14) // 3.14 coerced to 3
 
 	fmt.Println(s.Num, s.Str, s.V)
 	// Output: 42 3.14 3
@@ -387,17 +392,17 @@ func ExampleMapper_Prepare_reflectValue() {
 	p, _ := m.Prepare(reflect.ValueOf(&s)) // err ignored for brevity
 	_ = p.Plan("Str", "Num")               // err ignored for brevity
 
-	p.Set(3.14)
-	p.Set("42")
+	_ = p.Set(3.14)
+	_ = p.Set("42")
 
 	p.Rebind(reflect.ValueOf(&t))
-	p.Set(-3.14)
-	p.Set("24")
+	_ = p.Set(-3.14)
+	_ = p.Set("24")
 
 	// Even though the PreparedMapping was created with reflect.Value it will still accept *S directly.
 	p.Rebind(&u)
-	p.Set("Works!")
-	p.Set(uint(100))
+	_ = p.Set("Works!")
+	_ = p.Set(uint(100))
 
 	fmt.Println("s", s.Num, s.Str)
 	fmt.Println("t", t.Num, t.Str)

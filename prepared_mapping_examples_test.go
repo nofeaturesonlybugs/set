@@ -34,7 +34,7 @@ func ExamplePreparedMapping_Rebind() {
 	for k := range slice {
 		p.Rebind(&slice[k]) // The PreparedMapping now affects slice[k]
 		for _, value := range values[k] {
-			p.Set(value)
+			_ = p.Set(value) // error ignored for brevity
 		}
 	}
 
@@ -88,15 +88,15 @@ func ExamplePreparedMapping_Rebind_reflectValue() {
 
 	// Errors ignored for brevity.
 	p, _ := m.Prepare(&s)
-	p.Plan("Num", "Str")
+	_ = p.Plan("Num", "Str")
 
-	p.Set(42)
-	p.Set("Hello")
+	_ = p.Set(42)
+	_ = p.Set("Hello")
 
 	rv := reflect.New(reflect.TypeOf(s)) // reflect.New creates a *S which is the type
 	p.Rebind(rv)                         // originally bound.  Therefore b.Rebind(rv) is valid.
-	p.Set(100)
-	p.Set("reflect.Value!")
+	_ = p.Set(100)
+	_ = p.Set("reflect.Value!")
 	r := rv.Elem().Interface().(S)
 
 	fmt.Println(s.Str, s.Num)

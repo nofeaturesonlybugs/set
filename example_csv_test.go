@@ -64,7 +64,7 @@ func (u CSVUnmarshaler) Load(r io.Reader, dst interface{}) error {
 		b.Rebind(elemValue)       // allows reflect.Value as an argument.
 		// Row is a slice of data and headers has the mapped names in corresponding indexes.
 		for k, columnName := range headers {
-			b.Set(columnName, row[k]) // err will be checked after iteration.
+			_ = b.Set(columnName, row[k]) // err will be checked after iteration.
 		}
 		// b.Err() returns the first error encountered from b.Set()
 		if err = b.Err(); err != nil {

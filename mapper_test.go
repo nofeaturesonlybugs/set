@@ -37,6 +37,10 @@ func TestMapper(t *testing.T) {
 		chk.Equal("[0]", fmt.Sprintf("%v", mapping.Get("A")))
 		chk.Equal("[1]", fmt.Sprintf("%v", mapping.Get("B")))
 		chk.Empty(mapping.Get("shhhh"))
+
+		// golangci complains shhhh is unused, which is intended, but we want to shut up the linter.
+		data.shhhh = -9
+		chk.Equal(-9, data.shhhh)
 	}
 	{
 		type CommonDb struct {
@@ -131,7 +135,8 @@ func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
 		b, err := m.Bind(p)
 		chk.NoError(err)
 		for k, v := range values {
-			b.Set(k, v)
+			err = b.Set(k, v)
+			chk.NoError(err)
 		}
 		chk.NoError(b.Err())
 		chk.Equal("Bob", p.Name)
@@ -161,7 +166,8 @@ func TestMapper_Map_TaggedFieldsOnly(t *testing.T) {
 		delete(values, "address_Zoning")
 		//
 		for k, v := range values {
-			b.Set(k, v)
+			err = b.Set(k, v)
+			chk.NoError(err)
 		}
 		chk.NoError(b.Err())
 		chk.Equal("Bob", p.Name)
@@ -208,8 +214,10 @@ func TestMapperBindCollision(t *testing.T) {
 		}
 		bound, err := mapper.Bind(&t)
 		chk.NoError(err)
-		bound.Set("A_Id", "15")
-		bound.Set("B_Id", 25)
+		err = bound.Set("A_Id", "15")
+		chk.NoError(err)
+		err = bound.Set("B_Id", 25)
+		chk.NoError(err)
 		err = bound.Err()
 		chk.NoError(err)
 		chk.Equal(15, t.A.Id)

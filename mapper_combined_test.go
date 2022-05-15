@@ -451,24 +451,24 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 				bound, _ := m.Bind(NewV(test.V))
 				for n := 0; n < b.N; n++ {
 					bound.Rebind(NewV(test.V))
-					bound.Assignables(fieldNames, nil)
-					bound.Fields(fieldNames, nil)
+					_, _ = bound.Assignables(fieldNames, nil)
+					_, _ = bound.Fields(fieldNames, nil)
 					for _, field := range test.Fields {
-						bound.Field(field.Field)
-						bound.Set(field.Field, field.To)
+						_, _ = bound.Field(field.Field)
+						_ = bound.Set(field.Field, field.To)
 					}
 				}
 			})
 			B.Run("Prepare "+test.Name, func(b *testing.B) {
 				p, _ := m.Prepare(NewV(test.V))
-				p.Plan(fieldNames...)
+				_ = p.Plan(fieldNames...)
 				for n := 0; n < b.N; n++ {
 					p.Rebind(NewV(test.V))
-					p.Assignables(nil)
-					p.Fields(nil)
+					_, _ = p.Assignables(nil)
+					_, _ = p.Fields(nil)
 					for _, field := range test.Fields {
-						p.Field()
-						p.Set(field.To)
+						_, _ = p.Field()
+						_ = p.Set(field.To)
 					}
 				}
 			})
@@ -480,26 +480,26 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 				slice := make([]interface{}, len(fieldNames))
 				for n := 0; n < b.N; n++ {
 					bound.Rebind(NewV(test.V))
-					bound.Assignables(fieldNames, slice)
-					bound.Fields(fieldNames, slice)
+					_, _ = bound.Assignables(fieldNames, slice)
+					_, _ = bound.Fields(fieldNames, slice)
 					for _, field := range test.Fields {
-						bound.Field(field.Field)
-						bound.Set(field.Field, field.To)
+						_, _ = bound.Field(field.Field)
+						_ = bound.Set(field.Field, field.To)
 					}
 				}
 			})
 			B.Run("Prepare "+test.Name, func(b *testing.B) {
 				p, _ := m.Prepare(NewV(test.V))
-				p.Plan(fieldNames...)
+				_ = p.Plan(fieldNames...)
 				for n := 0; n < b.N; n++ {
 					p.Rebind(NewV(test.V))
-					p.Assignables(nil)
-					p.Fields(nil)
+					_, _ = p.Assignables(nil)
+					_, _ = p.Fields(nil)
 					for range fieldNames {
-						p.Field()
+						_, _ = p.Field()
 					}
 					for _, field := range test.Fields {
-						p.Set(field.To)
+						_ = p.Set(field.To)
 					}
 				}
 			})
@@ -510,16 +510,16 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 			ptrs := make([]interface{}, len(fieldNames))
 			for n := 0; n < b.N; n++ {
 				bound.Rebind(NewV(test.V))
-				bound.Assignables(fieldNames, ptrs)
+				_, _ = bound.Assignables(fieldNames, ptrs)
 			}
 		})
 		B.Run("Prepare Assignables "+test.Name, func(b *testing.B) {
 			p, _ := m.Prepare(NewV(test.V))
-			p.Plan(fieldNames...)
+			_ = p.Plan(fieldNames...)
 			ptrs := make([]interface{}, len(fieldNames))
 			for n := 0; n < b.N; n++ {
 				p.Rebind(NewV(test.V))
-				p.Assignables(ptrs)
+				_, _ = p.Assignables(ptrs)
 			}
 		})
 		B.Run("Bind Fields "+test.Name, func(b *testing.B) {
@@ -527,16 +527,16 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 			values := make([]interface{}, len(fieldNames))
 			for n := 0; n < b.N; n++ {
 				bound.Rebind(NewV(test.V))
-				bound.Fields(fieldNames, values)
+				_, _ = bound.Fields(fieldNames, values)
 			}
 		})
 		B.Run("Prepare Fields "+test.Name, func(b *testing.B) {
 			p, _ := m.Prepare(NewV(test.V))
-			p.Plan(fieldNames...)
+			_ = p.Plan(fieldNames...)
 			values := make([]interface{}, len(fieldNames))
 			for n := 0; n < b.N; n++ {
 				p.Rebind(NewV(test.V))
-				p.Fields(values)
+				_, _ = p.Fields(values)
 			}
 		})
 		B.Run("Bind Field "+test.Name, func(b *testing.B) {
@@ -544,17 +544,17 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 			for n := 0; n < b.N; n++ {
 				bound.Rebind(NewV(test.V))
 				for _, field := range test.Fields {
-					bound.Field(field.Field)
+					_, _ = bound.Field(field.Field)
 				}
 			}
 		})
 		B.Run("Prepare Field "+test.Name, func(b *testing.B) {
 			p, _ := m.Prepare(NewV(test.V))
-			p.Plan(fieldNames...)
+			_ = p.Plan(fieldNames...)
 			for n := 0; n < b.N; n++ {
 				p.Rebind(NewV(test.V))
 				for range test.Fields {
-					p.Field()
+					_, _ = p.Field()
 				}
 			}
 		})
@@ -563,17 +563,17 @@ func (tests MapStructTests) Benchmark(B *testing.B) {
 			for n := 0; n < b.N; n++ {
 				bound.Rebind(NewV(test.V))
 				for _, field := range test.Fields {
-					bound.Set(field.Field, field.To)
+					_ = bound.Set(field.Field, field.To)
 				}
 			}
 		})
 		B.Run("Prepare Set "+test.Name, func(b *testing.B) {
 			p, _ := m.Prepare(NewV(test.V))
-			p.Plan(fieldNames...)
+			_ = p.Plan(fieldNames...)
 			for n := 0; n < b.N; n++ {
 				p.Rebind(NewV(test.V))
 				for _, field := range test.Fields {
-					p.Set(field.To)
+					_ = p.Set(field.To)
 				}
 			}
 		})

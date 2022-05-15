@@ -30,7 +30,7 @@ func ExampleBoundMapping_Rebind() {
 	for k := range slice {
 		b.Rebind(&slice[k]) // The BoundMapping now affects slice[k]
 		for key, value := range values[k] {
-			b.Set(key, value)
+			_ = b.Set(key, value) // error ignored for brevity
 		}
 	}
 
@@ -84,13 +84,13 @@ func ExampleBoundMapping_Rebind_reflectValue() {
 
 	// Errors ignored for brevity.
 	b, _ := m.Bind(&s)
-	b.Set("Num", 42)
-	b.Set("Str", "Hello")
+	_ = b.Set("Num", 42) // b.Set errors ignored for brevity
+	_ = b.Set("Str", "Hello")
 
 	rv := reflect.New(reflect.TypeOf(s)) // reflect.New creates a *S which is the type
 	b.Rebind(rv)                         // originally bound.  Therefore b.Rebind(rv) is valid.
-	b.Set("Num", 100)
-	b.Set("Str", "reflect.Value!")
+	_ = b.Set("Num", 100)
+	_ = b.Set("Str", "reflect.Value!")
 	r := rv.Elem().Interface().(S)
 
 	fmt.Println(s.Str, s.Num)

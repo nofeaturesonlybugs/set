@@ -32,7 +32,7 @@ func ExampleGetterFunc() {
 	}
 	var t T
 
-	set.V(&t).Fill(myGetter)
+	_ = set.V(&t).Fill(myGetter) // error ignored for brevity
 	fmt.Println(t.Name, t.Age)
 
 	// Output: Bob 42
@@ -88,7 +88,7 @@ func ExampleGetterFunc_fillByTag() {
 	}
 	var t Person
 
-	set.V(&t).FillByTag("key", myGetter)
+	_ = set.V(&t).FillByTag("key", myGetter) // error ignored for brevity
 	fmt.Println(t.Name, t.Age)
 	fmt.Printf("%v, %v, %v  %v\n", t.Address.Street1, t.Address.City, t.Address.State, t.Address.Zip)
 
@@ -131,7 +131,7 @@ func ExampleMapGetter() {
 	}
 	var t Person
 
-	set.V(&t).FillByTag("key", myGetter)
+	_ = set.V(&t).FillByTag("key", myGetter) // error ignored for brevity
 	fmt.Println(t.Name, t.Age)
 	fmt.Printf("%v, %v, %v  %v\n", t.Address.Street1, t.Address.City, t.Address.State, t.Address.Zip)
 
