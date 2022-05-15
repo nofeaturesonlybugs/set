@@ -1,6 +1,6 @@
 # Changelog `set v0.4.0` to `set v0.5.0`
 
-This document outlines the changes and justifications between the versions listed above. In general `set v0.5.0` address performance and optimization bottlenecks in the prior version.
+This document outlines the changes and justifications between the versions listed above. In general `set v0.5.0` addresses performance and optimization bottlenecks in the prior version.
 
 There are a few breaking changes but they are mostly minor.
 
