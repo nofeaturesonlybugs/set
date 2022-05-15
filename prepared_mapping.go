@@ -68,6 +68,9 @@ type PreparedMapping struct {
 // query results.
 func (p PreparedMapping) Assignables(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
+		if p.err == ErrNoPlan {
+			return rv, pkgerr{Err: ErrNoPlan, CallSite: "PreparedMapping.Assignables", Hint: "call PreparedMapping.Plan to prepare access plan for " + p.top.String()}
+		}
 		return rv, p.err.(pkgerr).WithCallSite("PreparedMapping.Assignables")
 	}
 	if rv == nil {
@@ -116,6 +119,9 @@ func (p PreparedMapping) Copy() PreparedMapping {
 //
 // Err is reset on calls to Plan or Rebind.
 func (p PreparedMapping) Err() error {
+	if p.err == ErrNoPlan {
+		return pkgerr{Err: ErrNoPlan, CallSite: "PreparedMapping.Err", Hint: "call PreparedMapping.Plan to prepare access plan for " + p.top.String()}
+	}
 	return p.err
 }
 
@@ -129,6 +135,9 @@ func (p PreparedMapping) Err() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Field() (Value, error) {
 	if !p.valid {
+		if p.err == ErrNoPlan {
+			return zeroV, pkgerr{Err: ErrNoPlan, CallSite: "PreparedMapping.Field", Hint: "call PreparedMapping.Plan to prepare access plan for " + p.top.String()}
+		}
 		return zeroV, p.err.(pkgerr).WithCallSite("PreparedMapping.Field")
 	}
 	//
@@ -170,6 +179,9 @@ func (p *PreparedMapping) Field() (Value, error) {
 // database queries.
 func (p PreparedMapping) Fields(rv []interface{}) ([]interface{}, error) {
 	if !p.valid {
+		if p.err == ErrNoPlan {
+			return rv, pkgerr{Err: ErrNoPlan, CallSite: "PreparedMapping.Err", Hint: "call PreparedMapping.Plan to prepare access plan for " + p.top.String()}
+		}
 		return rv, p.err.(pkgerr).WithCallSite("PreparedMapping.Fields")
 	}
 	if rv == nil {
@@ -337,6 +349,9 @@ func (p *PreparedMapping) next() error {
 // errors from this package or standard library may also be returned.
 func (p *PreparedMapping) Set(value interface{}) error {
 	if !p.valid {
+		if p.err == ErrNoPlan {
+			return pkgerr{Err: ErrNoPlan, CallSite: "PreparedMapping.Set", Hint: "call PreparedMapping.Plan to prepare access plan for " + p.top.String()}
+		}
 		return p.err.(pkgerr).WithCallSite("PreparedMapping.Set")
 	}
 	//
