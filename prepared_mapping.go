@@ -263,7 +263,7 @@ func (p *PreparedMapping) Plan(fields ...string) error {
 		p.plan = make([]path.ReflectPath, 0, max)
 	}
 	p.plan = p.plan[0:0]
-	// p.valid=false // TODO+NB Needs test case
+	p.valid = false
 	//
 	for _, field := range fields {
 		path, ok := p.paths[field]

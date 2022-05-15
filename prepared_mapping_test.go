@@ -600,6 +600,51 @@ func TestPreparedMapping_Fields(t *testing.T) {
 	})
 }
 
+func TestPreparedMapping_PlanCorrectlySetsValid(t *testing.T) {
+	// ReparedMapping.Plan does not set p.valid=false before iterating the fields and building
+	// the plan.  This means if Plan() is called with a valid plan followed by an invalid
+	// plan the PreparedMapping instance will still treat the plan as valid.  This tests
+	// ensures consecutive calls to Plan() with invalid plans returns the correct error.
+
+	chk := assert.New(t)
+	type S struct {
+		A int
+		B string
+	}
+	var s S
+	p, err := set.DefaultMapper.Prepare(&s)
+	chk.NoError(err)
+
+	// Set a valid plan
+	err = p.Plan("A", "B")
+	chk.NoError(err)
+
+	// Use the plan
+	slice, err := p.Fields(nil)
+	chk.NoError(err)
+	chk.NotNil(slice)
+	chk.Len(slice, 2)
+
+	// Set an invalid plan
+	err = p.Plan("C")
+	chk.ErrorIs(err, set.ErrUnknownField)
+
+	// Use the invalid plan plan
+	slice, err = p.Fields(nil)
+	chk.ErrorIs(err, set.ErrNoPlan)
+	chk.Nil(slice)
+
+	// Set a valid plan
+	err = p.Plan("B", "A", "A")
+	chk.NoError(err)
+
+	// Use the plan
+	slice, err = p.Fields(nil)
+	chk.NoError(err)
+	chk.NotNil(slice)
+	chk.Len(slice, 3)
+}
+
 func TestPreparedMapping_ErrNoPlan(t *testing.T) {
 	// Mapper.Prepare sets the err field in PreparedMapping to ErrNoPlan.
 	// This test covers code blocks in PreparedMapping methods that check for
