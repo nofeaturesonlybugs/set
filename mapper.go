@@ -308,10 +308,9 @@ func (me *Mapper) Prepare(I interface{}) (PreparedMapping, error) {
 	rv := PreparedMapping{
 		top:   typ,
 		value: value,
-		err: pkgerr{ // PreparedMappings are invalid until Plan() is called.
-			Err:  ErrNoPlan,
-			Hint: "call PreparedMapping.Plan to prepare access plan for " + typ.String(),
-		},
+		// Set err to ErrNoPlan; previously it was set to a new instance of pkgerr{Err:ErrNoPlay,Hint:"a hint"+typ.String()}
+		// but this creates many allocations and hurts performance.
+		err:   ErrNoPlan,
 		paths: mapping.ReflectPaths,
 	}
 	return rv, nil
