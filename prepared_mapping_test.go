@@ -599,3 +599,26 @@ func TestPreparedMapping_Fields(t *testing.T) {
 		}
 	})
 }
+
+func TestPreparedMapping_ErrNoPlan(t *testing.T) {
+	// Mapper.Prepare sets the err field in PreparedMapping to ErrNoPlan.
+	// This test covers code blocks in PreparedMapping methods that check for
+	// this error and convert it to the pkgerr{} type.
+	chk := assert.New(t)
+	type S struct {
+		A int
+		B string
+	}
+	var s S
+	p, err := set.DefaultMapper.Prepare(&s)
+	chk.NoError(err)
+	slice, err := p.Assignables(nil)
+	chk.Nil(slice)
+	chk.ErrorIs(err, set.ErrNoPlan)
+
+	chk.ErrorIs(p.Err(), set.ErrNoPlan)
+
+	slice, err = p.Fields(slice)
+	chk.Nil(slice)
+	chk.ErrorIs(err, set.ErrNoPlan)
+}
