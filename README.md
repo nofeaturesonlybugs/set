@@ -24,8 +24,8 @@ set.V(&t).To(s)   // Sets s into t with a "best effort" approach.
 
 For convenience:
 
-- `set.GetterFunc` allows plain functions to be used as a `set.Getter` similar to `http.HandlerFunc`.
-- `set.MapGetter` allows either `map[string]T` or `map[interface{}]T` to be used as a `set.Getter`.
+-   `set.GetterFunc` allows plain functions to be used as a `set.Getter` similar to `http.HandlerFunc`.
+-   `set.MapGetter` allows either `map[string]T` or `map[interface{}]T` to be used as a `set.Getter`.
 
 ## Struct Mapping
 
@@ -38,11 +38,11 @@ or creating a generic struct copier to marshal structs across different domains 
 
 `set.Mapper` contains several configuration fields that can be used to fully customize the generated `friendly names`:
 
-- Choose how nested names are combined: `VendorName`, `Vendor_Name`, `Vendor.Name`, `vendor_name`, etc.
-- Specify multiple tags in order of preference: `db` tag values can have higher precedence than `json` tags
-- Elevate types into a higher namespace: see the Mapper example(s)
-- Specify types that are ignored and don't get mapped.
-- Specify types that are treated as scalars: useful for sql.Null\* types or similar
+-   Choose how nested names are combined: `VendorName`, `Vendor_Name`, `Vendor.Name`, `vendor_name`, etc.
+-   Specify multiple tags in order of preference: `db` tag values can have higher precedence than `json` tags
+-   Elevate types into a higher namespace: see the Mapper example(s)
+-   Specify types that are ignored and don't get mapped.
+-   Specify types that are treated as scalars: useful for sql.Null\* types or similar
 
 ## BoundMapping and PreparedMapping
 
@@ -56,47 +56,28 @@ A `PreparedMapping` is similar to a prepared SQL statement and the access plan m
 
 Package `reflect` is always slower than code not using `reflect`. A considerable effort has been spent designing and implementing this package to reduce reflect overhead.
 
-- `reflect` data is generally only gathered once (via reflect.TypeOf, reflect.ValueOf) when first encountering a type. This data is cached and retrieved from cache on further encounters with repeated types.
-- Value assigning is generally attempted first with type switches and then falls back to `reflect`. This strategy is heavily used during type coercion.
-- Appropriate types in this package have a `Rebind` method. `Rebind` will swap a "bound" Go type with a new incoming instance without making additional expensive calls into `reflect`. The outgoing and incoming types must be compatible but this is the expected usage in tight loops building slices of data.
+-   `reflect` data is generally only gathered once (via reflect.TypeOf, reflect.ValueOf) when first encountering a type. This data is cached and retrieved from cache on further encounters with repeated types.
+-   Value assigning is generally attempted first with type switches and then falls back to `reflect`. This strategy is heavily used during type coercion.
+-   Appropriate types in this package have a `Rebind` method. `Rebind` will swap a "bound" Go type with a new incoming instance without making additional expensive calls into `reflect`. The outgoing and incoming types must be compatible but this is the expected usage in tight loops building slices of data.
 
 Additionally this package attempts to be low allocation so as not to overwhelm the garbage collector.
 
-- Some of the methods on BoundMapping and PreparedMapping allow a dest slice to be pre-allocated.
-- BoundMapping, PreparedMapping, and Value are created and returned as structs instead of pointers.
+-   Some of the methods on BoundMapping and PreparedMapping allow a dest slice to be pre-allocated.
+-   BoundMapping, PreparedMapping, and Value are created and returned as structs instead of pointers.
 
 ## API Consistency and Breaking Changes
 
 I am making a very concerted effort to break the API as little as possible while adding features or fixing bugs. However this software is currently in a pre-1.0.0 version and breaking changes _are_ allowed under standard semver. As the API approaches a stable 1.0.0 release I will list any such breaking changes here and they will always be signaled by a bump in _minor_ version.
 
-- 0.4.0 ⭢ TODO
+-   0.4.0 ⭢ 0.5.0
 
-  - All or nearly all errors returned by this package are now sentinal errors compatible with `errors.Is()`.
-  - `BoundMapping` is now a struct and no longer an interface.
-    - The prior version used an internal private type with pointer-recievers to fulfill the
-      `BoundMapping` interface.
-    - This version uses a struct with mixed pointer and value receivers.
-    - Passing a `BoundMapping` as a function or method argument in the previous release is not guaranteed to work the same in this release due to the semantic difference between receiver types.
-  - `Mapper.Bind()` returns `(BoundMapping, error)` instead of just `BoundMapping`.
-  - `Mapper.Bind()` previously accepted a `*Value` as an argument. This is no longer supported.
-    - This use case was buried inside package tests and there was only a single small test for this usage.
-    - Since `Mapper.Bind` now accepts `reflect.Value` as an argument the behavior is still supported:
-      - Prior version: `m.Bind(v)` where m is a `Mapper` and v is a `*Value`
-      - Current version: `m.Bind(v.TopValue)`
-  - `Value` is now a value type and not a pointer type. Any methods that previously returned `*Value` now return `Value`.
-    - Most methods on `Value` have been altered to use value receivers, except the `Rebind` method which requires a pointer receiver.
-    - The `Rebind` method no longer performs a `nil` receiver check.
-  - `Value.To()` and _type coercion_ internally rewritten.
+    -   README-0.4.0-to-0.5.0.md outlines many of the package changes, reasoning, and benchmarks
 
-    - The prior version used an internal and poor-performing algorithm for type coercion.
-    - This version contains a subpackage named `coerce` that has a much better _type coercion_ implementation. It is both faster and more capable of returning good errors such as numeric overflow.
-    - Considerable effort was spent ensuring the new _type coercion_ code is correct and yields expected results; however I can not guarantee that this version coerces values completely equal to the prior version.
+    -   Remove erroneous documentation for `Value.To` method.  
+        The documentation indicated that when Dst and Src are both pointers with same level of indirection that direct assignment was performed. This is not true. The Value type uses the values at the end of pointers and pointer chains and therefore does not perform direct assignment of pointer values.
 
-  - Remove erroneous documentation for `Value.To` method.  
-    The documentation indicated that when Dst and Src are both pointers with same level of indirection that direct assignment was performed. This is not true. The Value type uses the values at the end of pointers and pointer chains and therefore does not perform direct assignment of pointer values.
+-   0.3.0 ⭢ 0.4.0  
+    set.Mapper has new field TaggedFieldsOnly. `TaggedFieldsOnly=false` means no change in behavior. `TaggedFieldsOnly=true` means set.Mapper only maps exported fields with struct tags.
 
-- 0.3.0 ⭢ 0.4.0  
-  set.Mapper has new field TaggedFieldsOnly. `TaggedFieldsOnly=false` means no change in behavior. `TaggedFieldsOnly=true` means set.Mapper only maps exported fields with struct tags.
-
-- 0.2.3 ⭢ 0.3.0  
-  set.BoundMapping.Assignables has a second argument allowing you to pre-allocate the slice that is returned; you can also set it to `nil` to keep current behavior.
+-   0.2.3 ⭢ 0.3.0  
+    set.BoundMapping.Assignables has a second argument allowing you to pre-allocate the slice that is returned; you can also set it to `nil` to keep current behavior.
