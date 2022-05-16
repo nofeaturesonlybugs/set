@@ -1,5 +1,101 @@
 /develop
 
+0.5.0
+    + Breaking change (impact=high)
+        Methods on type Value with pointer receivers no longer perform nil receiver checks.
+        In the prior version calling a method with a nil receiver would return an error; in
+        this version a nil pointer panic will occur.
+        Migration steps:
+            Ensure you are creating set.Value correctly with calls to set.V().
+        Reason:
+            My programming style tends to be overly defensive and initially I felt any and
+            all methods with pointer receivers should be safe guarded by nil checks.  This
+            is not -- in general -- how the Go standard library is designed.  When using
+            types like bytes.Buffer or strings.Builder we are expected to instantiate and
+            consume them correctly.  The removal of nil receiver checks in this package is
+            more aligned with existing Go philosophy.  Furthermore Go has some of the
+            best tooling for testing and when used correctly should prevent panics from
+            occuring in production code.
+
+    + Breaking change (impact=low)
+        Package error handling has been refactored to use sentinal errors compatible
+        with errors.Is() unwrapping.
+        + This removes dependency on github.com/nofeaturesonlybugs/errors
+        + Errors no longer have stack trace information when printed with %#v verb.
+        Migration steps:
+            Probably none.
+        Reason:
+            Sentinal errors and compatibility with errors.Is() is more aligned with
+            the general Go philosophy regarding error handling.  It also removes a
+            dependency (on my errors package) which potential package consumers might
+            not want in their code base.
+
+    + Breaking change (impact=low)
+        Mapper.Map returns Mapping instead of *Mapping.
+    
+    + Breaking change (impact=low)
+        Method receivers on type Mapping refactored to value-receivers instead of pointer-receivers.
+        None of the existing methods mutate the Mapping so this change should be low impact.
+
+    + Breaking change (impact=low)
+        BoundMapping is now a struct and no longer an interface type.
+        Migration steps:
+            Probably none.
+        Reason:
+            When BoundMapping as an interface was originally created I envisioned multiple
+            such mapping types that would provide different kinds of struct access.  However it has
+            become apparent that:
+                1) Not many such types have been warranted or needed and
+                2) PreparedMapping -- the closest type to warrant such an interface -- does not have
+                    a method set matching BoundMapping.
+
+    + Breaking change (impact=high)
+        Mapper.Bind returns (BoundMapping, error) instead of BoundMapping.
+        Migration steps:
+            Existing code calling Mapper.Bind should now check the returned error value and
+            discard or abandon the use of the BoundMapping if err is non-nil.
+        Reason:
+            The previous version of set allowed Mapper.Bind to be called with an unaddressable
+            value which would result in all (or most) methods on BoundMapping to return an error.
+            Changing the Mapper.Bind signature allows this checking to be performed when
+            a BoundMapping is being created and lessens the burden on BoundMapping methods from
+            performing this check and returning the proper error.
+
+    + Breaking change (impact=low)
+        Value is now a value type and most methods use value receivers.
+        Migration steps:
+            Change *Value declarations to Value.
+            Use the Copy method to make copies if not already doing so.
+        Reason:
+            Migrating Value to a value type with value receivers reduces allocations and the
+            load on the garbage collector.
+            Internally the members of Value are either meta data that does not change or
+            reflect.Value types that also act as value types.  So there's no real need for Value
+            to exist as a pointer; the one exception being the Rebind method that mutates internal
+            members.
+    
+    + BoundMapping
+        + Rebind allows argument to be reflect.Value if-and-only-if the value stored in the
+        reflect.Value is compatible with the type used to created the BoundMapping.
+
+    + Add types Slice and SlicePtr
+        Slice facilitates element creation and appending to []T.
+        SlicePtr ensures an interface{} value is *[]T or pointer chain to []T.  Deserializers needing
+        to deserialize data into a caller-provided slice can use SlicePtr to simplify validating
+        the destination as well as element creation and addition to the []T.        
+
+    + Add coerce subpackage.
+        `coerce` is a more efficient rewrite of the type coercion facility.
+
+    + Add path subpackage.
+        `path` traverses Go structs and gathers information for reflect-based or unsafe-based hiearchy
+        traversal.  The `unsafe` traversal logic is only partially implemented.
+
+    + Fix erroneous documentation for Value.To that indicated if Dst and Src were both pointers
+        with the same level of indirection that direct assignment is performed.  The Value type
+        performs assignment by working with the values at the end of pointer chains and therefore
+        does not perform direct assignment of pointers.
+        
 0.4.0
     + set.Mapper
         + Add TaggedFieldsOnly field.

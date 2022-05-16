@@ -18,22 +18,23 @@ func (me GetterFunc) Get(name string) interface{} {
 	return me(name)
 }
 
-// MapGetter accepts a map and returns a Getter.  Map keys need to be either interface{}
-// or string; i.e. the map needs to be of type map[string]* or map[interface{}]*.
+// MapGetter accepts a map and returns a Getter.
+//
+// Map keys must be string or interface{}.
 func MapGetter(m interface{}) Getter {
 	rv := GetterFunc(func(key string) interface{} { return nil })
 	//
-	v := reflect.ValueOf(m)
-	k, t := v.Kind(), v.Type()
-	if k != reflect.Map {
+	RV := reflect.ValueOf(m)
+	K, T := RV.Kind(), RV.Type()
+	if K != reflect.Map {
 		return rv
 	}
-	if t.Key().Kind() != reflect.String && t.Key().Kind() != reflect.Interface {
+	if T.Key().Kind() != reflect.String && T.Key().Kind() != reflect.Interface {
 		return rv
 	}
 	//
 	rv = GetterFunc(func(key string) interface{} {
-		if reflected := v.MapIndex(reflect.ValueOf(key)); reflected.IsValid() {
+		if reflected := RV.MapIndex(reflect.ValueOf(key)); reflected.IsValid() {
 			value := V(reflected.Interface())
 			if value.IsMap {
 				return MapGetter(reflected.Interface())

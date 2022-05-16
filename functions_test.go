@@ -66,11 +66,11 @@ func ExampleWritable() {
 	var sp *string
 
 	value = reflect.ValueOf(s)
-	writable, ok = set.Writable(value)
+	_, ok = set.Writable(value)
 	fmt.Printf("ok= %v\n", ok)
 
 	value = reflect.ValueOf(sp)
-	writable, ok = set.Writable(value)
+	_, ok = set.Writable(value)
 	fmt.Printf("ok= %v\n", ok)
 
 	value = reflect.ValueOf(&sp)

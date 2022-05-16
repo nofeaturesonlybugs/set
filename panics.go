@@ -18,7 +18,7 @@ type CanPanic struct{}
 // Panics is a global instance of CanPanic; it is provided for convenience.
 var Panics = CanPanic{}
 
-// Append appends any number of *Value types to the dest *Value.  The safest way to use this method
+// Append appends any number of Value types to the dest Value.  The safest way to use this method
 // is when your code uses a variant of:
 //	var records []*Record
 //	v := set.V( &records )
@@ -26,7 +26,7 @@ var Panics = CanPanic{}
 //		elem := v.Elem.New()
 //		set.Panics.Append( v, elem )
 //	}
-func (p CanPanic) Append(dest *Value, values ...*Value) {
+func (p CanPanic) Append(dest Value, values ...Value) {
 	for _, value := range values {
 		dest.WriteValue.Set(reflect.Append(dest.WriteValue, reflect.Indirect(value.TopValue)))
 	}
