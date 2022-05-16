@@ -1,5 +1,6 @@
 /develop
 
+0.5.0
     + Breaking change (impact=high)
         Methods on type Value with pointer receivers no longer perform nil receiver checks.
         In the prior version calling a method with a nil receiver would return an error; in
@@ -84,6 +85,11 @@
         the destination as well as element creation and addition to the []T.        
 
     + Add coerce subpackage.
+        `coerce` is a more efficient rewrite of the type coercion facility.
+
+    + Add path subpackage.
+        `path` traverses Go structs and gathers information for reflect-based or unsafe-based hiearchy
+        traversal.  The `unsafe` traversal logic is only partially implemented.
 
     + Fix erroneous documentation for Value.To that indicated if Dst and Src were both pointers
         with the same level of indirection that direct assignment is performed.  The Value type
