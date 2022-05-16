@@ -47,7 +47,8 @@ func (tests MapStructTests) Run(t *testing.T, m *set.Mapper) {
 	if m == nil {
 		// Default if not provided is basic mapper joining with DOT
 		m = &set.Mapper{
-			Join: ".",
+			TreatAsScalar: set.NewTypeList(Scalar{}),
+			Join:          ".",
 		}
 	}
 	//
@@ -616,11 +617,24 @@ type PrimitivesStruct struct {
 	S   string
 }
 
+// Scalar is for testing Mapper.TreatAsScalar
+type Scalar struct {
+	N int
+	S string
+}
+
+// ScalarParent is the mapped struct for testing Mapper.TreatAsScalar.
+type ScalarParent struct {
+	X, Y int
+	S    Scalar
+}
+
 func Test_Mapper_BindPrepare(t *testing.T) {
 	var simple SimpleStruct
 	var nested NestedStruct
 	var nestedPtr NestedPtrStruct
 	var primitives PrimitivesStruct
+	var scalarParent ScalarParent
 	//
 	tests := []MapStructTest{
 		//
@@ -710,6 +724,26 @@ func Test_Mapper_BindPrepare(t *testing.T) {
 				{Field: "F32", To: float32(3.14), Expect: float32(3.14)},
 				{Field: "F64", To: float64(6.28), Expect: float64(6.28)},
 				{Field: "S", To: "Cheerio", Expect: "Cheerio"},
+			},
+		},
+		{
+			// Testing TreatAsScalar
+			Name: "treat as scalar",
+			V:    &scalarParent,
+			Fields: []MapField{
+				{Field: "X", To: 10, Expect: 10},
+				{Field: "Y", To: 20, Expect: 20},
+				{
+					Field: "S",
+					To: Scalar{
+						N: 100,
+						S: "Treated as scalar!",
+					},
+					Expect: Scalar{
+						N: 100,
+						S: "Treated as scalar!",
+					},
+				},
 			},
 		},
 	}
