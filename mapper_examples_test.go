@@ -129,7 +129,7 @@ func ExampleMapper_treatAsScalarTime() {
 }
 
 func ExampleMapper_Bind() {
-	// This example demonstrats a simple flat struct of primitives.
+	// This example demonstrates a simple flat struct of primitives.
 	type S struct {
 		Num int
 		Str string
@@ -267,7 +267,7 @@ func ExampleMapper_Bind_reflectValue() {
 }
 
 func ExampleMapper_Prepare() {
-	// This example demonstrats a simple flat struct of primitives.
+	// This example demonstrates a simple flat struct of primitives.
 	type S struct {
 		Num int
 		Str string
