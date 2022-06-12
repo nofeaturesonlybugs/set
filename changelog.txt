@@ -1,5 +1,13 @@
 /develop
 
+0.5.2
+    + Package maintenance.
+        + Update dependencies.
+        + Update go.mod
+        
+0.5.1
+    + Package maintenance.
+
 0.5.0
     + Breaking change (impact=high)
         Methods on type Value with pointer receivers no longer perform nil receiver checks.
